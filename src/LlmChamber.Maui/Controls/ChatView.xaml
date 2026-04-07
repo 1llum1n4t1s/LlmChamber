@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:LlmChamber.Maui.Controls"
+             x:Class="LlmChamber.Maui.Controls.ChatView"
+             x:DataType="controls:ChatView"
+             x:Name="ThisView">
+
+    <Grid RowDefinitions="*, Auto"
+          Padding="8">
+
+        <!-- メッセージ表示エリア -->
+        <CollectionView x:Name="MessageList"
+                        Grid.Row="0"
+                        ItemsSource="{Binding Messages, Source={x:Reference ThisView}}"
+                        SelectionMode="None"
+                        Margin="0,0,0,8">
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="controls:ChatMessageViewModel">
+                    <Frame Padding="12"
+                           Margin="4,4,4,4"
+                           CornerRadius="12"
+                           BorderColor="Transparent"
+                           BackgroundColor="{Binding BackgroundColor}"
+                           HorizontalOptions="{Binding Alignment}">
+                        <VerticalStackLayout Spacing="4">
+                            <Label Text="{Binding RoleLabel}"
+                                   FontSize="12"
+                                   FontAttributes="Bold"
+                                   TextColor="{Binding RoleColor}" />
+                            <Label Text="{Binding Content}"
+                                   FontSize="14"
+                                   TextColor="{Binding TextColor}"
+                                   LineBreakMode="WordWrap" />
+                        </VerticalStackLayout>
+                    </Frame>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <!-- 入力エリア -->
+        <Grid Grid.Row="1"
+              ColumnDefinitions="*, Auto"
+              ColumnSpacing="8">
+            <Entry x:Name="InputEntry"
+                   Grid.Column="0"
+                   Placeholder="メッセージを入力..."
+                   FontSize="14"
+                   ReturnType="Send"
+                   IsEnabled="{Binding IsInputEnabled, Source={x:Reference ThisView}}" />
+            <Button x:Name="SendButton"
+                    Grid.Column="1"
+                    Text="送信"
+                    FontSize="14"
+                    WidthRequest="70"
+                    IsEnabled="{Binding IsInputEnabled, Source={x:Reference ThisView}}" />
+        </Grid>
+    </Grid>
+
+</ContentView>

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <UseMaui>true</UseMaui>
+    <PackageId>LlmChamber.Maui</PackageId>
+    <Description>LlmChamber .NET MAUI用チャットビュー。モバイル・デスクトップ対応のローカルLLM対話UI。</Description>
+    <IsPackable>true</IsPackable>
+    <RootNamespace>LlmChamber.Maui</RootNamespace>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <SingleProject>true</SingleProject>
+  </PropertyGroup>
+
+  <!-- CRDebugger方式: Coreソース取り込み -->
+  <ItemGroup>
+    <Compile Include="..\LlmChamber.Core\**\*.cs"
+             Link="Core\%(RecursiveDir)%(Filename)%(Extension)"
+             Exclude="..\LlmChamber.Core\obj\**;..\LlmChamber.Core\bin\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.20" />
+  </ItemGroup>
+</Project>

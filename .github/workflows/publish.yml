@@ -1,0 +1,51 @@
+name: Publish to NuGet
+
+on:
+  push:
+    branches:
+      - 'release/**'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install MAUI workload
+        run: dotnet workload install maui
+
+      - name: Restore dependencies
+        run: dotnet restore LlmChamber.slnx
+
+      - name: Build Release
+        run: dotnet build LlmChamber.slnx -c Release --no-restore
+
+      - name: Pack LlmChamber
+        run: dotnet pack src/LlmChamber/LlmChamber.csproj -c Release --no-build -o artifacts
+
+      - name: Pack LlmChamber.Wpf
+        run: dotnet pack src/LlmChamber.Wpf/LlmChamber.Wpf.csproj -c Release --no-build -o artifacts
+
+      - name: Pack LlmChamber.Avalonia
+        run: dotnet pack src/LlmChamber.Avalonia/LlmChamber.Avalonia.csproj -c Release --no-build -o artifacts
+
+      - name: Pack LlmChamber.WinForms
+        run: dotnet pack src/LlmChamber.WinForms/LlmChamber.WinForms.csproj -c Release --no-build -o artifacts
+
+      - name: Pack LlmChamber.Maui
+        run: dotnet pack src/LlmChamber.Maui/LlmChamber.Maui.csproj -c Release --no-build -o artifacts
+
+      - name: Publish to NuGet
+        run: |
+          $apiKey = $env:NUGET_API_KEY
+          .\publish.ps1
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        shell: pwsh

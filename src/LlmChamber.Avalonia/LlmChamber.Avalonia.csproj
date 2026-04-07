@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <PackageId>LlmChamber.Avalonia</PackageId>
+    <Description>LlmChamber Avalonia UI用チャットコントロール。Win/macOS/Linuxクロスプラットフォーム対応。</Description>
+    <IsPackable>true</IsPackable>
+    <RootNamespace>LlmChamber.Avalonia</RootNamespace>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!-- CRDebugger方式: Coreソース取り込み -->
+  <ItemGroup>
+    <Compile Include="..\LlmChamber.Core\**\*.cs"
+             Link="Core\%(RecursiveDir)%(Filename)%(Extension)"
+             Exclude="..\LlmChamber.Core\obj\**;..\LlmChamber.Core\bin\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.*" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.*" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.*" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.*" />
+  </ItemGroup>
+</Project>

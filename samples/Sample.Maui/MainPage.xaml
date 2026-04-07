@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:LlmChamber.Maui.Controls;assembly=LlmChamber.Maui"
+             x:Class="Sample.Maui.MainPage"
+             Title="LlmChamber - MAUI Sample">
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+        <!-- ツールバー -->
+        <HorizontalStackLayout Grid.Row="0" Spacing="8" Padding="8"
+                               BackgroundColor="{AppThemeBinding Light=#F0F0F0, Dark=#2A2A2A}">
+            <Label Text="モデル:" VerticalOptions="Center"/>
+            <Picker x:Name="ModelPicker" WidthRequest="160" SelectedIndex="0">
+                <Picker.ItemsSource>
+                    <x:Array Type="{x:Type x:String}">
+                        <x:String>gemma4-e2b</x:String>
+                        <x:String>gemma4-e4b</x:String>
+                        <x:String>qwen3.5-2b</x:String>
+                        <x:String>phi4-mini</x:String>
+                    </x:Array>
+                </Picker.ItemsSource>
+            </Picker>
+            <Label Text="バリアント:" VerticalOptions="Center"/>
+            <Picker x:Name="VariantPicker" WidthRequest="120" SelectedIndex="0">
+                <Picker.ItemsSource>
+                    <x:Array Type="{x:Type x:String}">
+                        <x:String>Auto</x:String>
+                        <x:String>Full</x:String>
+                        <x:String>Rocm</x:String>
+                        <x:String>CpuOnly</x:String>
+                    </x:Array>
+                </Picker.ItemsSource>
+            </Picker>
+            <Button x:Name="ConnectButton" Text="接続" Clicked="ConnectButton_Clicked" Padding="12,4"/>
+        </HorizontalStackLayout>
+
+        <!-- ダウンロード進捗 -->
+        <controls:DownloadProgressView x:Name="DownloadProgress"
+                                       Grid.Row="1"
+                                       IsVisible="False"
+                                       Margin="16"/>
+
+        <!-- チャットビュー -->
+        <controls:ChatView x:Name="ChatView"
+                           Grid.Row="2"
+                           IsVisible="False"/>
+
+        <!-- ステータスバー -->
+        <Border Grid.Row="3" BackgroundColor="{AppThemeBinding Light=#E8E8E8, Dark=#333333}" Padding="8,4">
+            <Label x:Name="StatusLabel" Text="未接続" FontSize="12"/>
+        </Border>
+    </Grid>
+</ContentPage>

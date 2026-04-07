@@ -1,0 +1,73 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:LlmChamber.Avalonia.Controls"
+             x:Class="LlmChamber.Avalonia.Controls.DownloadProgressControl">
+
+  <UserControl.Styles>
+    <Style Selector="TextBlock.section-title">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="#424242" />
+      <Setter Property="Margin" Value="0,0,0,4" />
+    </Style>
+    <Style Selector="TextBlock.status-text">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="#757575" />
+      <Setter Property="Margin" Value="0,2,0,0" />
+    </Style>
+    <Style Selector="TextBlock.gpu-info">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="#1976D2" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="ProgressBar.download-bar">
+      <Setter Property="Height" Value="6" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="Foreground" Value="#1976D2" />
+      <Setter Property="Background" Value="#E0E0E0" />
+    </Style>
+    <Style Selector="Border.progress-card">
+      <Setter Property="Background" Value="#FAFAFA" />
+      <Setter Property="BorderBrush" Value="#E0E0E0" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="16,12" />
+    </Style>
+  </UserControl.Styles>
+
+  <Border Classes="progress-card">
+    <StackPanel Spacing="12">
+
+      <!-- GPU情報 -->
+      <StackPanel Spacing="2" Name="GpuInfoPanel" IsVisible="False">
+        <TextBlock Text="GPU" Classes="section-title" />
+        <TextBlock Name="GpuInfoText" Classes="gpu-info" />
+      </StackPanel>
+
+      <!-- ランタイムダウンロード -->
+      <StackPanel Spacing="4" Name="RuntimeSection" IsVisible="False">
+        <TextBlock Text="ランタイム" Classes="section-title" />
+        <ProgressBar Name="RuntimeProgressBar" Classes="download-bar"
+                     Minimum="0" Maximum="100" Value="0" />
+        <TextBlock Name="RuntimeStatusText" Classes="status-text" />
+      </StackPanel>
+
+      <!-- モデルダウンロード -->
+      <StackPanel Spacing="4" Name="ModelSection" IsVisible="False">
+        <TextBlock Text="モデル" Classes="section-title" />
+        <ProgressBar Name="ModelProgressBar" Classes="download-bar"
+                     Minimum="0" Maximum="100" Value="0" />
+        <TextBlock Name="ModelStatusText" Classes="status-text" />
+      </StackPanel>
+
+      <!-- 何も表示がない場合のプレースホルダー -->
+      <TextBlock Name="IdleText"
+                 Text="ダウンロード待機中"
+                 FontSize="12"
+                 Foreground="#BDBDBD"
+                 HorizontalAlignment="Center"
+                 IsVisible="True" />
+
+    </StackPanel>
+  </Border>
+</UserControl>

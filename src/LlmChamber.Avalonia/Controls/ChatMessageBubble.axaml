@@ -1,0 +1,57 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:LlmChamber.Avalonia.Controls"
+             xmlns:llm="clr-namespace:LlmChamber;assembly=LlmChamber.Avalonia"
+             x:Class="LlmChamber.Avalonia.Controls.ChatMessageBubble"
+             x:DataType="llm:ChatMessage">
+
+  <UserControl.Styles>
+    <!-- ユーザーメッセージ: 青系背景、右寄せ -->
+    <Style Selector="Border.user-bubble">
+      <Setter Property="Background" Value="#E3F2FD" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+    </Style>
+    <!-- アシスタントメッセージ: グレー系背景、左寄せ -->
+    <Style Selector="Border.assistant-bubble">
+      <Setter Property="Background" Value="#F5F5F5" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+    <!-- システムメッセージ: 黄色背景、中央 -->
+    <Style Selector="Border.system-bubble">
+      <Setter Property="Background" Value="#FFFDE7" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="Border.system-bubble TextBlock.message-text">
+      <Setter Property="FontStyle" Value="Italic" />
+    </Style>
+
+    <!-- ロールラベルのスタイル -->
+    <Style Selector="TextBlock.role-label">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Foreground" Value="#757575" />
+      <Setter Property="Margin" Value="4,0,4,2" />
+    </Style>
+
+    <!-- メッセージテキストのスタイル -->
+    <Style Selector="TextBlock.message-text">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Foreground" Value="#212121" />
+    </Style>
+  </UserControl.Styles>
+
+  <Border Name="BubbleBorder"
+          CornerRadius="8"
+          Padding="12,8"
+          Margin="8,4"
+          MaxWidth="600"
+          MinWidth="80">
+    <StackPanel Spacing="2">
+      <TextBlock Name="RoleLabel"
+                 Classes="role-label" />
+      <TextBlock Name="MessageText"
+                 Classes="message-text" />
+    </StackPanel>
+  </Border>
+</UserControl>

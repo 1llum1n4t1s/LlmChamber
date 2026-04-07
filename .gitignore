@@ -1,0 +1,25 @@
+## .NET
+bin/
+obj/
+artifacts/
+
+## IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.DotSettings.user
+
+## OS
+Thumbs.db
+.DS_Store
+
+## NuGet
+*.nupkg
+*.snupkg
+
+## Build
+*.log
+TestResults/
+.claude/settings.local.json

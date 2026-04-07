@@ -1,0 +1,46 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:LlmChamber.Avalonia.Controls;assembly=LlmChamber.Avalonia"
+        x:Class="Sample.Avalonia.MainWindow"
+        Title="LlmChamber - Avalonia Sample" Width="900" Height="700">
+    <DockPanel>
+        <!-- ツールバー -->
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal"
+                    Background="#F0F0F0" Spacing="8" Margin="8,4">
+            <TextBlock Text="モデル:" VerticalAlignment="Center"/>
+            <ComboBox x:Name="ModelComboBox" Width="160" SelectedIndex="0">
+                <ComboBoxItem Content="gemma4-e2b"/>
+                <ComboBoxItem Content="gemma4-e4b"/>
+                <ComboBoxItem Content="qwen3.5-2b"/>
+                <ComboBoxItem Content="phi4-mini"/>
+            </ComboBox>
+            <TextBlock Text="バリアント:" VerticalAlignment="Center"/>
+            <ComboBox x:Name="VariantComboBox" Width="120" SelectedIndex="0">
+                <ComboBoxItem Content="Auto"/>
+                <ComboBoxItem Content="Full"/>
+                <ComboBoxItem Content="Rocm"/>
+                <ComboBoxItem Content="CpuOnly"/>
+            </ComboBox>
+            <Button x:Name="ConnectButton" Content="接続" Click="ConnectButton_Click" Padding="12,4"/>
+        </StackPanel>
+
+        <!-- ステータスバー -->
+        <Border DockPanel.Dock="Bottom" Background="#E8E8E8" Padding="8,4">
+            <TextBlock x:Name="StatusBarText" Text="未接続" FontSize="12"/>
+        </Border>
+
+        <!-- メインコンテンツ -->
+        <Panel>
+            <!-- ダウンロード進捗（初期化中に表示） -->
+            <controls:DownloadProgressControl x:Name="DownloadProgress"
+                                              IsVisible="False"
+                                              VerticalAlignment="Center"
+                                              HorizontalAlignment="Center"
+                                              Margin="40"/>
+
+            <!-- チャットコントロール -->
+            <controls:ChatControl x:Name="ChatControl"
+                                  IsVisible="False"/>
+        </Panel>
+    </DockPanel>
+</Window>

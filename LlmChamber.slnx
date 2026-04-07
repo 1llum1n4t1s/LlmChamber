@@ -1,0 +1,21 @@
+<Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/Sample.Avalonia/Sample.Avalonia.csproj" />
+    <Project Path="samples/Sample.Console/Sample.Console.csproj" />
+    <Project Path="samples/Sample.Maui/Sample.Maui.csproj" />
+    <Project Path="samples/Sample.WinForms/Sample.WinForms.csproj" />
+    <Project Path="samples/Sample.Wpf/Sample.Wpf.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/LlmChamber.Avalonia/LlmChamber.Avalonia.csproj" />
+    <Project Path="src/LlmChamber.Core/LlmChamber.Core.csproj" />
+    <Project Path="src/LlmChamber.Maui/LlmChamber.Maui.csproj" />
+    <Project Path="src/LlmChamber.WinForms/LlmChamber.WinForms.csproj" />
+    <Project Path="src/LlmChamber.Wpf/LlmChamber.Wpf.csproj" />
+    <Project Path="src/LlmChamber/LlmChamber.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/LlmChamber.IntegrationTests/LlmChamber.IntegrationTests.csproj" />
+    <Project Path="test/LlmChamber.Tests/LlmChamber.Tests.csproj" />
+  </Folder>
+</Solution>

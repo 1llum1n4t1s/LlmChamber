@@ -1,0 +1,126 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:LlmChamber.Avalonia.Controls"
+             x:Class="LlmChamber.Avalonia.Controls.ChatControl">
+
+  <UserControl.Styles>
+    <!-- ヘッダーエリア -->
+    <Style Selector="Border.header-area">
+      <Setter Property="Background" Value="#FAFAFA" />
+      <Setter Property="BorderBrush" Value="#E0E0E0" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
+      <Setter Property="Padding" Value="16,8" />
+    </Style>
+
+    <!-- メッセージリスト領域 -->
+    <Style Selector="ScrollViewer.message-scroll">
+      <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+      <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+    </Style>
+
+    <!-- 入力エリア -->
+    <Style Selector="Border.input-area">
+      <Setter Property="Background" Value="#FAFAFA" />
+      <Setter Property="BorderBrush" Value="#E0E0E0" />
+      <Setter Property="BorderThickness" Value="0,1,0,0" />
+      <Setter Property="Padding" Value="12,8" />
+    </Style>
+
+    <!-- 入力テキストボックス -->
+    <Style Selector="TextBox.chat-input">
+      <Setter Property="Watermark" Value="メッセージを入力..." />
+      <Setter Property="AcceptsReturn" Value="False" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="MinHeight" Value="36" />
+      <Setter Property="CornerRadius" Value="18" />
+      <Setter Property="Padding" Value="12,8" />
+      <Setter Property="FontSize" Value="14" />
+    </Style>
+
+    <!-- 送信ボタン -->
+    <Style Selector="Button.send-button">
+      <Setter Property="Background" Value="#1976D2" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="CornerRadius" Value="18" />
+      <Setter Property="Padding" Value="16,8" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="MinWidth" Value="70" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.send-button:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#1565C0" />
+    </Style>
+    <Style Selector="Button.send-button:disabled /template/ ContentPresenter">
+      <Setter Property="Background" Value="#BDBDBD" />
+    </Style>
+
+    <!-- ステータスラベル -->
+    <Style Selector="TextBlock.status-label">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="#9E9E9E" />
+    </Style>
+    <Style Selector="TextBlock.model-label">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="#424242" />
+    </Style>
+
+    <!-- 空状態メッセージ -->
+    <Style Selector="TextBlock.empty-hint">
+      <Setter Property="FontSize" Value="16" />
+      <Setter Property="Foreground" Value="#BDBDBD" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <!-- ヘッダー: モデル名 & ステータス -->
+    <Border Grid.Row="0" Classes="header-area">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8"
+                    VerticalAlignment="Center">
+          <Border Name="StatusDot" Width="8" Height="8" CornerRadius="4" Background="#BDBDBD" />
+          <TextBlock Name="StatusLabel" Classes="status-label" Text="未接続" />
+        </StackPanel>
+        <TextBlock Name="ModelLabel" Classes="model-label" Text="LLM Chat" />
+      </DockPanel>
+    </Border>
+
+    <!-- メッセージリスト -->
+    <ScrollViewer Grid.Row="1" Name="MessageScrollViewer" Classes="message-scroll">
+      <Panel>
+        <!-- 空状態ヒント -->
+        <TextBlock Name="EmptyHint" Classes="empty-hint"
+                   Text="メッセージを入力して会話を始めましょう"
+                   IsVisible="True" />
+        <!-- メッセージ一覧 -->
+        <ItemsControl Name="MessageList" Padding="0,8">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <controls:ChatMessageBubble Message="{Binding}" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </Panel>
+    </ScrollViewer>
+
+    <!-- 入力エリア -->
+    <Border Grid.Row="2" Classes="input-area">
+      <DockPanel>
+        <Button Name="SendButton"
+                DockPanel.Dock="Right"
+                Classes="send-button"
+                Content="送信"
+                Margin="8,0,0,0"
+                VerticalAlignment="Center" />
+        <TextBox Name="InputTextBox"
+                 Classes="chat-input"
+                 VerticalAlignment="Center" />
+      </DockPanel>
+    </Border>
+  </Grid>
+</UserControl>

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:LlmChamber.Maui.Controls"
+             x:Class="LlmChamber.Maui.Controls.DownloadProgressView"
+             x:DataType="controls:DownloadProgressView"
+             x:Name="ThisView">
+
+    <VerticalStackLayout Padding="12"
+                         Spacing="8">
+
+        <!-- GPU情報 -->
+        <Label x:Name="GpuInfoLabel"
+               Text="{Binding GpuDisplayText, Source={x:Reference ThisView}}"
+               FontSize="12"
+               TextColor="Gray" />
+
+        <!-- ランタイムダウンロード進捗 -->
+        <Label x:Name="RuntimeStatusLabel"
+               Text="{Binding RuntimeStatusText, Source={x:Reference ThisView}}"
+               FontSize="13"
+               FontAttributes="Bold" />
+        <ProgressBar x:Name="RuntimeProgressBar"
+                     Progress="{Binding RuntimeProgressValue, Source={x:Reference ThisView}}"
+                     ProgressColor="{StaticResource Primary}"
+                     HeightRequest="8" />
+
+        <!-- モデルダウンロード進捗 -->
+        <Label x:Name="ModelStatusLabel"
+               Text="{Binding ModelStatusText, Source={x:Reference ThisView}}"
+               FontSize="13"
+               FontAttributes="Bold" />
+        <ProgressBar x:Name="ModelProgressBar"
+                     Progress="{Binding ModelProgressValue, Source={x:Reference ThisView}}"
+                     ProgressColor="{StaticResource Primary}"
+                     HeightRequest="8" />
+
+    </VerticalStackLayout>
+
+</ContentView>
