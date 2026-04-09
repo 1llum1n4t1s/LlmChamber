@@ -21,11 +21,13 @@ jobs:
       - name: Install MAUI workload
         run: dotnet workload install maui
 
-      - name: Restore dependencies
-        run: dotnet restore LlmChamber.slnx
-
-      - name: Build Release
-        run: dotnet build LlmChamber.slnx -c Release --no-restore
+      - name: Build src projects
+        run: |
+          dotnet build src/LlmChamber/LlmChamber.csproj -c Release
+          dotnet build src/LlmChamber.Wpf/LlmChamber.Wpf.csproj -c Release
+          dotnet build src/LlmChamber.Avalonia/LlmChamber.Avalonia.csproj -c Release
+          dotnet build src/LlmChamber.WinForms/LlmChamber.WinForms.csproj -c Release
+          dotnet build src/LlmChamber.Maui/LlmChamber.Maui.csproj -c Release
 
       - name: Pack LlmChamber
         run: dotnet pack src/LlmChamber/LlmChamber.csproj -c Release --no-build -o artifacts
