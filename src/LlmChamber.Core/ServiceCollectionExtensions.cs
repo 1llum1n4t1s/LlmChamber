@@ -1,6 +1,7 @@
 using System.Net.Http;
 using LlmChamber.Internal;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -26,10 +27,14 @@ public static class ServiceCollectionExtensions
 
         // ファクトリデリゲートで登録。ILogger<T>をGetServiceで取得し、未登録時はNullLoggerにフォールバック。
         // これによりAddLogging()の呼び出し有無・順序に完全に非依存。
-        services.AddSingleton<HttpClient>();
+        // ダウンローダーとAPIクライアントで別のHttpClientを使用する
+        // （HttpClient.BaseAddressはリクエスト送信後に変更できないため）
+        // TryAddで登録し、消費者が事前にカスタムHttpClientを登録していれば上書きしない
+        services.TryAddKeyedSingleton<HttpClient>(LlmChamberHttpClients.Downloader);
+        services.TryAddKeyedSingleton<HttpClient>(LlmChamberHttpClients.Api);
 
         services.AddSingleton(sp => new OllamaDownloader(
-            sp.GetRequiredService<HttpClient>(),
+            sp.GetRequiredKeyedService<HttpClient>(LlmChamberHttpClients.Downloader),
             ResolveLogger<OllamaDownloader>(sp)));
 
         services.AddSingleton(sp => new OllamaProcessManager(
@@ -37,7 +42,7 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IOptions<LlmChamberOptions>>()));
 
         services.AddSingleton(sp => new OllamaApiClient(
-            sp.GetRequiredService<HttpClient>(),
+            sp.GetRequiredKeyedService<HttpClient>(LlmChamberHttpClients.Api),
             ResolveLogger<OllamaApiClient>(sp)));
 
         services.AddSingleton<IRuntimeManager>(sp => new RuntimeManager(

@@ -76,3 +76,47 @@ public class ModelNotFoundException : LlmChamberException
     public ModelNotFoundException(string modelTag)
         : base($"モデル '{modelTag}' が見つかりません。") => ModelTag = modelTag;
 }
+
+/// <summary>Ollamaランタイムのインストール（ダウンロード・展開）に失敗した場合の例外。</summary>
+public class RuntimeInstallException : LlmChamberException
+{
+    /// <summary>ダウンロード元URL。</summary>
+    public string? DownloadUrl { get; }
+
+    /// <summary>アーカイブのパス。</summary>
+    public string? ArchivePath { get; }
+
+    /// <summary>新しいインスタンスを初期化する。</summary>
+    public RuntimeInstallException(string message, string? downloadUrl = null, string? archivePath = null)
+        : base(message)
+    {
+        DownloadUrl = downloadUrl;
+        ArchivePath = archivePath;
+    }
+
+    /// <summary>内部例外付きで新しいインスタンスを初期化する。</summary>
+    public RuntimeInstallException(string message, Exception innerException, string? downloadUrl = null, string? archivePath = null)
+        : base(message, innerException)
+    {
+        DownloadUrl = downloadUrl;
+        ArchivePath = archivePath;
+    }
+}
+
+/// <summary>サポートされていないOS/アーキテクチャの場合の例外。</summary>
+public class UnsupportedPlatformException : PlatformNotSupportedException
+{
+    /// <summary>検出されたOS名。</summary>
+    public string? DetectedOs { get; }
+
+    /// <summary>検出されたアーキテクチャ名。</summary>
+    public string? DetectedArchitecture { get; }
+
+    /// <summary>新しいインスタンスを初期化する。</summary>
+    public UnsupportedPlatformException(string message, string? detectedOs = null, string? detectedArchitecture = null)
+        : base(message)
+    {
+        DetectedOs = detectedOs;
+        DetectedArchitecture = detectedArchitecture;
+    }
+}

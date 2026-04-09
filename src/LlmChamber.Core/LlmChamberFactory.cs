@@ -22,12 +22,16 @@ public static class LlmChamberFactory
         configure?.Invoke(options);
 
         var loggerFactory = NullLoggerFactory.Instance;
-        var httpClient = new HttpClient();
 
-        var downloader = new OllamaDownloader(httpClient, loggerFactory.CreateLogger<OllamaDownloader>());
+        // ダウンローダーとAPIクライアントで別のHttpClientを使用する
+        // （HttpClient.BaseAddressはリクエスト送信後に変更できないため）
+        var downloadHttpClient = new HttpClient();
+        var apiHttpClient = new HttpClient();
+
+        var downloader = new OllamaDownloader(downloadHttpClient, loggerFactory.CreateLogger<OllamaDownloader>());
         var wrappedOptions = Options.Create(options);
         var processManager = new OllamaProcessManager(loggerFactory.CreateLogger<OllamaProcessManager>(), wrappedOptions);
-        var apiClient = new OllamaApiClient(httpClient, loggerFactory.CreateLogger<OllamaApiClient>());
+        var apiClient = new OllamaApiClient(apiHttpClient, loggerFactory.CreateLogger<OllamaApiClient>());
         var runtimeManager = new RuntimeManager(downloader, apiClient, processManager, wrappedOptions,
             loggerFactory.CreateLogger<RuntimeManager>());
 

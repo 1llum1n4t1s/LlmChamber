@@ -11,7 +11,9 @@ internal static class PlatformInfo
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return OsPlatform.Windows;
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux)) return OsPlatform.Linux;
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) return OsPlatform.MacOS;
-        throw new PlatformNotSupportedException($"サポートされていないOS: {RuntimeInformation.OSDescription}");
+        throw new UnsupportedPlatformException(
+            $"サポートされていないOS: {RuntimeInformation.OSDescription}",
+            detectedOs: RuntimeInformation.OSDescription);
     }
 
     /// <summary>現在のCPUアーキテクチャを取得する。</summary>
@@ -21,8 +23,9 @@ internal static class PlatformInfo
         {
             Architecture.X64 => CpuArchitecture.X64,
             Architecture.Arm64 => CpuArchitecture.Arm64,
-            _ => throw new PlatformNotSupportedException(
-                $"サポートされていないアーキテクチャ: {RuntimeInformation.OSArchitecture}"),
+            _ => throw new UnsupportedPlatformException(
+                $"サポートされていないアーキテクチャ: {RuntimeInformation.OSArchitecture}",
+                detectedArchitecture: RuntimeInformation.OSArchitecture.ToString()),
         };
     }
 
@@ -37,7 +40,10 @@ internal static class PlatformInfo
             OsPlatform.Windows => GetWindowsBinaryInfo(arch, variant),
             OsPlatform.Linux => GetLinuxBinaryInfo(arch, variant),
             OsPlatform.MacOS => ("ollama-darwin", ".tgz"),
-            _ => throw new PlatformNotSupportedException(),
+            _ => throw new UnsupportedPlatformException(
+                $"サポートされていないプラットフォーム: {os}/{arch}",
+                detectedOs: os.ToString(),
+                detectedArchitecture: arch.ToString()),
         };
     }
 

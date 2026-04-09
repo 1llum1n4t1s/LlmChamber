@@ -10,6 +10,11 @@ public interface ILocalLlm : IAsyncDisposable, IDisposable
     /// Ollamaランタイムのダウンロード（必要な場合）、プロセス起動、モデルpullを実行する。
     /// 初回推論時に自動的に呼ばれるが、事前にウォームアップしたい場合に明示的に呼び出し可能。
     /// </summary>
+    /// <exception cref="UnsupportedPlatformException">サポートされていないOS/アーキテクチャの場合。</exception>
+    /// <exception cref="RuntimeNotFoundException">Ollamaバイナリが見つからず、自動ダウンロードが無効の場合。</exception>
+    /// <exception cref="RuntimeInstallException">ランタイムのダウンロードまたは展開に失敗した場合。</exception>
+    /// <exception cref="ProcessStartException">Ollamaプロセスの起動に失敗した場合。</exception>
+    /// <exception cref="OllamaApiException">モデルpull等のOllama API呼び出しに失敗した場合。</exception>
     Task InitializeAsync(CancellationToken cancellationToken = default);
 
     /// <summary>初期化が完了しOllamaプロセスが稼働中かどうか。</summary>
@@ -22,6 +27,8 @@ public interface ILocalLlm : IAsyncDisposable, IDisposable
     /// プロンプトからテキストをストリーミング生成する。
     /// 初回呼び出し時に自動的に初期化される。
     /// </summary>
+    /// <exception cref="LlmChamberException">初期化またはOllama APIの呼び出しに失敗した場合。</exception>
+    /// <exception cref="OllamaApiException">推論リクエストのHTTPエラー。</exception>
     IAsyncEnumerable<string> GenerateAsync(
         string prompt,
         InferenceOptions? options = null,
@@ -31,6 +38,8 @@ public interface ILocalLlm : IAsyncDisposable, IDisposable
     /// プロンプトからテキストを一括生成して返す。
     /// 初回呼び出し時に自動的に初期化される。
     /// </summary>
+    /// <exception cref="LlmChamberException">初期化またはOllama APIの呼び出しに失敗した場合。</exception>
+    /// <exception cref="OllamaApiException">推論リクエストのHTTPエラー。</exception>
     Task<string> GenerateCompleteAsync(
         string prompt,
         InferenceOptions? options = null,
@@ -40,6 +49,8 @@ public interface ILocalLlm : IAsyncDisposable, IDisposable
     IChatSession CreateChatSession(ChatOptions? options = null);
 
     /// <summary>テキストのEmbeddingベクトルを取得する。</summary>
+    /// <exception cref="LlmChamberException">初期化またはOllama APIの呼び出しに失敗した場合。</exception>
+    /// <exception cref="OllamaApiException">Embedding APIのHTTPエラー。</exception>
     Task<float[]> GetEmbeddingAsync(
         string text,
         CancellationToken cancellationToken = default);

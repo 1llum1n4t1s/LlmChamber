@@ -51,14 +51,60 @@ internal sealed class OllamaDownloader
             return existing;
         }
 
+        string runtimeDir = Path.Combine(targetDirectory, "runtime");
+        Directory.CreateDirectory(runtimeDir);
+
+        if (variant == RuntimeVariant.Rocm && os != OsPlatform.MacOS)
+        {
+            // ROCm: Full版（ollama本体）+ ROCm追加DLLの2段階ダウンロード
+            // Windows/LinuxのROCmアーカイブにはollama本体が含まれないため、まずFull版で取得する
+            // macOSではROCm非対応のため通常のダウンロードにフォールバック
+            await DownloadAndExtractToRuntimeAsync(
+                targetDirectory, runtimeDir, os, arch, RuntimeVariant.Full, version,
+                progress, cancellationToken, "ベースランタイム (Full)");
+            await DownloadAndExtractToRuntimeAsync(
+                targetDirectory, runtimeDir, os, arch, RuntimeVariant.Rocm, version,
+                progress, cancellationToken, "ROCmライブラリ");
+        }
+        else
+        {
+            await DownloadAndExtractToRuntimeAsync(
+                targetDirectory, runtimeDir, os, arch, variant, version,
+                progress, cancellationToken);
+        }
+
+        // バージョンマーカー書き込み（バージョン:バリアント）
+        string versionMarkerPath = Path.Combine(targetDirectory, ".version");
+        await File.WriteAllTextAsync(versionMarkerPath, $"{version}:{variant}", cancellationToken);
+
+        _logger.LogInformation("Ollamaランタイム v{Version} のインストール完了: {Path}", version, binaryPath);
+        progress?.Report(new DownloadProgress(0, null, 100, "インストール完了"));
+
+        return binaryPath;
+    }
+
+    /// <summary>
+    /// 指定バリアントのアーカイブをダウンロード・展開し、runtimeDirにコピーする。
+    /// ROCmの2段階ダウンロードで共通化するためのヘルパー。
+    /// </summary>
+    private async Task DownloadAndExtractToRuntimeAsync(
+        string targetDirectory,
+        string runtimeDir,
+        OsPlatform os,
+        CpuArchitecture arch,
+        RuntimeVariant variant,
+        string version,
+        IProgress<DownloadProgress>? progress,
+        CancellationToken cancellationToken,
+        string? phaseLabel = null)
+    {
         string downloadFileName = PlatformInfo.GetDownloadFileName(os, arch, variant);
         string downloadUrl = string.Format(GithubReleaseUrlTemplate, version, downloadFileName);
+        string label = phaseLabel ?? downloadFileName;
 
         _logger.LogInformation("Ollamaランタイムをダウンロード中: {Url}", downloadUrl);
-        progress?.Report(new DownloadProgress(0, null, null, $"ダウンロード開始: {downloadFileName}"));
+        progress?.Report(new DownloadProgress(0, null, null, $"ダウンロード開始: {label}"));
 
-        string runtimeDir = Path.Combine(targetDirectory, "runtime");
-        // アーカイブ拡張子を保持 + GUID付与で並行ダウンロードの競合防止
         var (_, archiveExt) = PlatformInfo.GetOllamaBinaryInfo(os, arch, variant);
         string uniqueId = Guid.NewGuid().ToString("N")[..8];
         string tmpDownloadPath = Path.Combine(targetDirectory, $"download.{uniqueId}{archiveExt}");
@@ -66,26 +112,34 @@ internal sealed class OllamaDownloader
 
         try
         {
-            Directory.CreateDirectory(runtimeDir);
-
             // ダウンロード
-            await DownloadFileAsync(downloadUrl, tmpDownloadPath, progress, cancellationToken);
+            try
+            {
+                await DownloadFileAsync(downloadUrl, tmpDownloadPath, progress, cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException and not RuntimeInstallException)
+            {
+                throw new RuntimeInstallException(
+                    $"Ollamaランタイムのダウンロードに失敗しました: {ex.Message}",
+                    ex, downloadUrl: downloadUrl);
+            }
 
             // 展開
-            progress?.Report(new DownloadProgress(0, null, null, "展開中..."));
-            await ExtractAsync(tmpDownloadPath, tmpExtractDir, os, cancellationToken);
+            progress?.Report(new DownloadProgress(0, null, null, $"展開中: {label}"));
+            try
+            {
+                await ExtractAsync(tmpDownloadPath, tmpExtractDir, os, cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException and not RuntimeInstallException)
+            {
+                throw new RuntimeInstallException(
+                    $"アーカイブの展開に失敗しました: {ex.Message}",
+                    ex, archivePath: tmpDownloadPath);
+            }
 
-            // バイナリをランタイムディレクトリに移動
+            // バイナリをランタイムディレクトリに移動（上書きマージ）
+            string executableName = PlatformInfo.GetOllamaExecutableName(os);
             MoveExtractedBinary(tmpExtractDir, runtimeDir, executableName, os);
-
-            // バージョンマーカー書き込み（バージョン:バリアント）
-            string versionMarkerPath = Path.Combine(targetDirectory, ".version");
-            await File.WriteAllTextAsync(versionMarkerPath, $"{version}:{variant}", cancellationToken);
-
-            _logger.LogInformation("Ollamaランタイム v{Version} のインストール完了: {Path}", version, binaryPath);
-            progress?.Report(new DownloadProgress(0, null, 100, "インストール完了"));
-
-            return binaryPath;
         }
         finally
         {
@@ -185,12 +239,16 @@ internal sealed class OllamaDownloader
             if (process.ExitCode != 0)
             {
                 string error = await process.StandardError.ReadToEndAsync(cancellationToken);
-                throw new LlmChamberException($"tar展開に失敗しました (exit {process.ExitCode}): {error}");
+                throw new RuntimeInstallException(
+                    $"tar展開に失敗しました (exit {process.ExitCode}): {error}",
+                    archivePath: archivePath);
             }
         }
         else
         {
-            throw new LlmChamberException($"未対応のアーカイブ形式: {archivePath}");
+            throw new RuntimeInstallException(
+                $"未対応のアーカイブ形式: {archivePath}",
+                archivePath: archivePath);
         }
     }
 
