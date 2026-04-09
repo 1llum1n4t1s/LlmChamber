@@ -73,6 +73,22 @@ public class MyService(ILocalLlm llm)
 }
 ```
 
+#### HttpClientのカスタマイズ（プロキシ・証明書等）
+
+LlmChamberは内部で2つの `HttpClient` を Keyed Services で登録しています。`AddLlmChamber()` の前に独自の `HttpClient` を登録すれば差し替え可能です:
+
+```csharp
+// プロキシ経由でGitHub Releasesからダウンロードする例
+services.AddKeyedSingleton<HttpClient>(LlmChamberHttpClients.Downloader, (sp, key) =>
+    new HttpClient(new HttpClientHandler { Proxy = new WebProxy("http://proxy:8080") }));
+
+// Ollama APIクライアントのカスタマイズ
+services.AddKeyedSingleton<HttpClient>(LlmChamberHttpClients.Api, (sp, key) =>
+    new HttpClient(customHandler));
+
+services.AddLlmChamber();
+```
+
 ## NuGetパッケージ
 
 | パッケージ | 用途 |
@@ -150,6 +166,35 @@ await llm.InitializeAsync();
 // LLMインスタンスをコントロールに接続するだけでチャットUI完成
 ChatControl.LlmInstance = llm;
 ```
+
+## 例外ハンドリング
+
+```csharp
+try
+{
+    await llm.InitializeAsync();
+}
+catch (UnsupportedPlatformException ex)
+{
+    // サポート外のOS/アーキテクチャ（PlatformNotSupportedException派生）
+    Console.WriteLine($"未対応: {ex.DetectedOs} / {ex.DetectedArchitecture}");
+}
+catch (RuntimeInstallException ex)
+{
+    // ランタイムのダウンロード・展開失敗
+    Console.WriteLine($"インストール失敗: {ex.Message}");
+}
+catch (ProcessStartException ex)
+{
+    // Ollamaプロセスの起動失敗
+}
+catch (OllamaApiException ex)
+{
+    // Ollama APIエラー（モデルpull失敗等）
+}
+```
+
+全ての例外は `LlmChamberException` を基底クラスとしています（`UnsupportedPlatformException` のみ `PlatformNotSupportedException` 派生）。
 
 ## 動作要件
 
