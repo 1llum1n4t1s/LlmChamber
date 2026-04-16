@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using SuperLightLogger;
 
 namespace LlmChamber.Internal;
 
@@ -12,24 +12,22 @@ internal sealed class LocalLlm : ILocalLlm
     private readonly OllamaProcessManager _processManager;
     private readonly OllamaApiClient _apiClient;
     private readonly LlmChamberOptions _options;
-    private readonly ILogger<LocalLlm> _logger;
-    private bool _initialized;
-    private bool _disposed;
+    private static readonly ILog _logger = LogManager.GetLogger<LocalLlm>();
+    private volatile bool _initialized;
+    private volatile bool _disposed;
 
     public LocalLlm(
         IOptions<LlmChamberOptions> options,
         OllamaDownloader downloader,
         OllamaProcessManager processManager,
         OllamaApiClient apiClient,
-        IRuntimeManager runtimeManager,
-        ILogger<LocalLlm> logger)
+        IRuntimeManager runtimeManager)
     {
         _options = options.Value;
         _downloader = downloader;
         _processManager = processManager;
         _apiClient = apiClient;
         Runtime = runtimeManager;
-        _logger = logger;
     }
 
     public bool IsReady => _initialized && _processManager.IsRunning;
@@ -68,7 +66,7 @@ internal sealed class LocalLlm : ILocalLlm
             }
 
             _initialized = true;
-            _logger.LogInformation("LlmChamber初期化完了。モデル: {Model}", _options.DefaultModel);
+            _logger.Info($"LlmChamber初期化完了。モデル: {_options.DefaultModel}");
         }
         finally
         {

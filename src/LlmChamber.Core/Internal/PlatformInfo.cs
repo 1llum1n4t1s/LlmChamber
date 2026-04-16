@@ -37,8 +37,8 @@ internal static class PlatformInfo
     {
         return os switch
         {
-            OsPlatform.Windows => GetWindowsBinaryInfo(arch, variant),
-            OsPlatform.Linux => GetLinuxBinaryInfo(arch, variant),
+            OsPlatform.Windows => GetDesktopBinaryInfo("windows", ".zip", arch, variant),
+            OsPlatform.Linux => GetDesktopBinaryInfo("linux", ".tar.zst", arch, variant),
             OsPlatform.MacOS => ("ollama-darwin", ".tgz"),
             _ => throw new UnsupportedPlatformException(
                 $"サポートされていないプラットフォーム: {os}/{arch}",
@@ -47,18 +47,12 @@ internal static class PlatformInfo
         };
     }
 
-    private static (string, string) GetWindowsBinaryInfo(CpuArchitecture arch, RuntimeVariant variant)
+    private static (string, string) GetDesktopBinaryInfo(
+        string osName, string extension, CpuArchitecture arch, RuntimeVariant variant)
     {
         string archStr = arch == CpuArchitecture.Arm64 ? "arm64" : "amd64";
         string suffix = variant == RuntimeVariant.Rocm ? "-rocm" : "";
-        return ($"ollama-windows-{archStr}{suffix}", ".zip");
-    }
-
-    private static (string, string) GetLinuxBinaryInfo(CpuArchitecture arch, RuntimeVariant variant)
-    {
-        string archStr = arch == CpuArchitecture.Arm64 ? "arm64" : "amd64";
-        string suffix = variant == RuntimeVariant.Rocm ? "-rocm" : "";
-        return ($"ollama-linux-{archStr}{suffix}", ".tar.zst");
+        return ($"ollama-{osName}-{archStr}{suffix}", extension);
     }
 
     /// <summary>Ollamaのダウンロード先ファイル名（拡張子込み）を取得する。</summary>

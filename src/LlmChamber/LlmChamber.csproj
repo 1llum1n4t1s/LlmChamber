@@ -9,14 +9,12 @@
 
   <!-- CRDebugger方式: Coreソース取り込み -->
   <ItemGroup>
-    <Compile Include="..\LlmChamber.Core\**\*.cs"
-             Link="Core\%(RecursiveDir)%(Filename)%(Extension)"
-             Exclude="..\LlmChamber.Core\obj\**;..\LlmChamber.Core\bin\**" />
+    <Compile Include="..\LlmChamber.Core\**\*.cs" Link="Core\%(RecursiveDir)%(Filename)%(Extension)" Exclude="..\LlmChamber.Core\obj\**;..\LlmChamber.Core\bin\**" />
   </ItemGroup>
 
 <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.*" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.*" />
-    <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.*" />
+    <PackageReference Include="SuperLightLogger" Version="1.0.6" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.6" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.6" />
   </ItemGroup>
 </Project>

@@ -1,6 +1,6 @@
 using System.IO;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using SuperLightLogger;
 
 namespace LlmChamber.Internal;
 
@@ -11,20 +11,18 @@ internal sealed class RuntimeManager : IRuntimeManager
     private readonly OllamaApiClient _apiClient;
     private readonly OllamaProcessManager _processManager;
     private readonly LlmChamberOptions _options;
-    private readonly ILogger<RuntimeManager> _logger;
+    private static readonly ILog _logger = LogManager.GetLogger<RuntimeManager>();
 
     public RuntimeManager(
         OllamaDownloader downloader,
         OllamaApiClient apiClient,
         OllamaProcessManager processManager,
-        IOptions<LlmChamberOptions> options,
-        ILogger<RuntimeManager> logger)
+        IOptions<LlmChamberOptions> options)
     {
         _downloader = downloader;
         _apiClient = apiClient;
         _processManager = processManager;
         _options = options.Value;
-        _logger = logger;
     }
 
     public async Task<string> EnsureRuntimeAsync(
@@ -32,7 +30,7 @@ internal sealed class RuntimeManager : IRuntimeManager
         CancellationToken cancellationToken = default)
     {
         var variant = _options.RuntimeVariant == RuntimeVariant.Auto
-            ? GpuDetector.DetectRecommendedVariant(_logger)
+            ? GpuDetector.DetectRecommendedVariant()
             : _options.RuntimeVariant;
 
         // AutoDownloadRuntimeが無効の場合、既存バイナリのみチェック（バリアントも一致確認）
@@ -86,11 +84,11 @@ internal sealed class RuntimeManager : IRuntimeManager
         var tags = await _apiClient.ListModelsAsync(cancellationToken);
         if (tags.Models.Any(m => IsModelMatch(m.Name, resolvedTag)))
         {
-            _logger.LogDebug("モデル '{Tag}' は既にpull済みです。", resolvedTag);
+            _logger.Debug($"モデル '{resolvedTag}' は既にpull済みです。");
             return;
         }
 
-        _logger.LogInformation("モデル '{Tag}' をpull中...", resolvedTag);
+        _logger.Info($"モデル '{resolvedTag}' をpull中...");
 
         await foreach (var chunk in _apiClient.PullModelAsync(resolvedTag, cancellationToken))
         {
@@ -105,7 +103,7 @@ internal sealed class RuntimeManager : IRuntimeManager
             }
         }
 
-        _logger.LogInformation("モデル '{Tag}' のpull完了。", resolvedTag);
+        _logger.Info($"モデル '{resolvedTag}' のpull完了。");
     }
 
     public async Task<IReadOnlyList<ModelInfo>> ListModelsAsync(CancellationToken cancellationToken = default)
@@ -126,18 +124,24 @@ internal sealed class RuntimeManager : IRuntimeManager
         await EnsureProcessRunningAsync(cancellationToken);
         string resolvedTag = OllamaModels.ResolveModelTag(modelTag);
         await _apiClient.DeleteModelAsync(resolvedTag, cancellationToken);
-        _logger.LogInformation("モデル '{Tag}' を削除しました。", resolvedTag);
+        _logger.Info($"モデル '{resolvedTag}' を削除しました。");
     }
 
-    public Task<long> GetCacheSizeBytesAsync(CancellationToken cancellationToken = default)
+    public async Task<long> GetCacheSizeBytesAsync(CancellationToken cancellationToken = default)
     {
         string cacheDir = _options.CacheDirectory;
-        if (!Directory.Exists(cacheDir)) return Task.FromResult(0L);
+        if (!Directory.Exists(cacheDir)) return 0L;
 
-        long size = Directory.EnumerateFiles(cacheDir, "*", SearchOption.AllDirectories)
-            .Sum(f => new FileInfo(f).Length);
-
-        return Task.FromResult(size);
+        return await Task.Run(() =>
+        {
+            long size = 0;
+            foreach (var file in new DirectoryInfo(cacheDir).EnumerateFiles("*", SearchOption.AllDirectories))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                size += file.Length;
+            }
+            return size;
+        }, cancellationToken);
     }
 
     public IReadOnlyList<ModelPreset> GetAvailablePresets() => OllamaModels.Presets;

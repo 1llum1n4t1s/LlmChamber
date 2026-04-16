@@ -2,8 +2,6 @@ using System.Net.Http;
 using LlmChamber.Internal;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace LlmChamber;
@@ -13,8 +11,6 @@ public static class ServiceCollectionExtensions
 {
     /// <summary>
     /// LlmChamberをDIコンテナに登録する。
-    /// AddLogging()の呼び出し有無・順序に依存しない。
-    /// ILoggerFactoryが登録されていればそれを使い、未登録ならNullLoggerにフォールバックする。
     /// </summary>
     public static IServiceCollection AddLlmChamber(
         this IServiceCollection services,
@@ -25,8 +21,6 @@ public static class ServiceCollectionExtensions
         else
             services.Configure<LlmChamberOptions>(_ => { });
 
-        // ファクトリデリゲートで登録。ILogger<T>をGetServiceで取得し、未登録時はNullLoggerにフォールバック。
-        // これによりAddLogging()の呼び出し有無・順序に完全に非依存。
         // ダウンローダーとAPIクライアントで別のHttpClientを使用する
         // （HttpClient.BaseAddressはリクエスト送信後に変更できないため）
         // TryAddで登録し、消費者が事前にカスタムHttpClientを登録していれば上書きしない
@@ -34,36 +28,27 @@ public static class ServiceCollectionExtensions
         services.TryAddKeyedSingleton<HttpClient>(LlmChamberHttpClients.Api);
 
         services.AddSingleton(sp => new OllamaDownloader(
-            sp.GetRequiredKeyedService<HttpClient>(LlmChamberHttpClients.Downloader),
-            ResolveLogger<OllamaDownloader>(sp)));
+            sp.GetRequiredKeyedService<HttpClient>(LlmChamberHttpClients.Downloader)));
 
         services.AddSingleton(sp => new OllamaProcessManager(
-            ResolveLogger<OllamaProcessManager>(sp),
             sp.GetRequiredService<IOptions<LlmChamberOptions>>()));
 
         services.AddSingleton(sp => new OllamaApiClient(
-            sp.GetRequiredKeyedService<HttpClient>(LlmChamberHttpClients.Api),
-            ResolveLogger<OllamaApiClient>(sp)));
+            sp.GetRequiredKeyedService<HttpClient>(LlmChamberHttpClients.Api)));
 
         services.AddSingleton<IRuntimeManager>(sp => new RuntimeManager(
             sp.GetRequiredService<OllamaDownloader>(),
             sp.GetRequiredService<OllamaApiClient>(),
             sp.GetRequiredService<OllamaProcessManager>(),
-            sp.GetRequiredService<IOptions<LlmChamberOptions>>(),
-            ResolveLogger<RuntimeManager>(sp)));
+            sp.GetRequiredService<IOptions<LlmChamberOptions>>()));
 
         services.AddSingleton<ILocalLlm>(sp => new LocalLlm(
             sp.GetRequiredService<IOptions<LlmChamberOptions>>(),
             sp.GetRequiredService<OllamaDownloader>(),
             sp.GetRequiredService<OllamaProcessManager>(),
             sp.GetRequiredService<OllamaApiClient>(),
-            sp.GetRequiredService<IRuntimeManager>(),
-            ResolveLogger<LocalLlm>(sp)));
+            sp.GetRequiredService<IRuntimeManager>()));
 
         return services;
     }
-
-    /// <summary>ILogger&lt;T&gt;を解決する。未登録ならNullLogger&lt;T&gt;にフォールバック。</summary>
-    private static ILogger<T> ResolveLogger<T>(IServiceProvider sp) =>
-        sp.GetService<ILogger<T>>() ?? NullLogger<T>.Instance;
 }

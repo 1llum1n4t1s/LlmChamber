@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using Microsoft.Extensions.Logging;
+using SuperLightLogger;
 
 namespace LlmChamber.Internal;
 
@@ -12,19 +12,21 @@ internal sealed record GpuInfo(string Vendor, string Name, long? VramBytes, bool
 /// </summary>
 internal static class GpuDetector
 {
+    private static readonly ILog _logger = LogManager.GetLogger(typeof(GpuDetector));
+
     /// <summary>推奨RuntimeVariantを検出する。</summary>
-    public static RuntimeVariant DetectRecommendedVariant(ILogger? logger = null)
+    public static RuntimeVariant DetectRecommendedVariant()
     {
         try
         {
-            var gpu = DetectGpu(logger);
+            var gpu = DetectGpu();
             if (gpu is null)
             {
-                logger?.LogInformation("GPUが検出されませんでした。CPU-onlyモードを使用します。");
+                _logger.Info("GPUが検出されませんでした。CPU-onlyモードを使用します。");
                 return RuntimeVariant.CpuOnly;
             }
 
-            logger?.LogInformation("GPU検出: {Vendor} {Name}", gpu.Vendor, gpu.Name);
+            _logger.Info($"GPU検出: {gpu.Vendor} {gpu.Name}");
 
             return gpu.Vendor.ToUpperInvariant() switch
             {
@@ -37,25 +39,25 @@ internal static class GpuDetector
         }
         catch (Exception ex)
         {
-            logger?.LogWarning(ex, "GPU検出に失敗しました。CPU-onlyモードを使用します。");
+            _logger.Warn($"GPU検出に失敗しました。CPU-onlyモードを使用します。: {ex.Message}");
             return RuntimeVariant.CpuOnly;
         }
     }
 
     /// <summary>GPUハードウェア情報を検出する。</summary>
-    public static GpuInfo? DetectGpu(ILogger? logger = null)
+    public static GpuInfo? DetectGpu()
     {
         var os = PlatformInfo.GetCurrentOs();
         return os switch
         {
-            OsPlatform.Windows => DetectGpuWindows(logger),
-            OsPlatform.Linux => DetectGpuLinux(logger),
-            OsPlatform.MacOS => DetectGpuMacOs(logger),
+            OsPlatform.Windows => DetectGpuWindows(),
+            OsPlatform.Linux => DetectGpuLinux(),
+            OsPlatform.MacOS => DetectGpuMacOs(),
             _ => null,
         };
     }
 
-    private static GpuInfo? DetectGpuWindows(ILogger? logger)
+    private static GpuInfo? DetectGpuWindows()
     {
         // PowerShell CIM (Get-CimInstance) を使用。wmic.exeはWin11で廃止済み。
         try
@@ -63,6 +65,8 @@ internal static class GpuDetector
             string output = RunCommand("powershell", "-NoProfile -Command \"Get-CimInstance Win32_VideoController | Select-Object AdapterCompatibility,AdapterRAM,Name | ConvertTo-Csv -NoTypeInformation\"");
             var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
+            // NPU検出は高コスト（全PnPデバイス列挙）のため1回だけ実行
+            bool hasNpu = DetectNpu();
             GpuInfo? firstGpu = null;
 
             foreach (string line in lines.Skip(1)) // CSVヘッダーをスキップ
@@ -77,10 +81,10 @@ internal static class GpuDetector
 
                 if (string.IsNullOrEmpty(vendor)) continue;
 
-                var gpuInfo = new GpuInfo(vendor, name, vram > 0 ? vram : null, DetectNpu(logger));
+                var gpuInfo = new GpuInfo(vendor, name, vram > 0 ? vram : null, hasNpu);
 
                 // 専用GPUを優先
-                if (IsDiscreteGpu(vendor, name))
+                if (IsDiscreteGpu(vendor))
                     return gpuInfo;
 
                 firstGpu ??= gpuInfo;
@@ -90,7 +94,7 @@ internal static class GpuDetector
         }
         catch (Exception ex)
         {
-            logger?.LogDebug(ex, "Windows GPU検出エラー (PowerShell CIM)");
+            _logger.Debug($"Windows GPU検出エラー (PowerShell CIM): {ex.Message}");
         }
         return null;
     }
@@ -98,22 +102,54 @@ internal static class GpuDetector
     private static string[] ParseCsvLine(string line)
     {
         var result = new List<string>();
+        var field = new System.Text.StringBuilder();
         bool inQuote = false;
-        int start = 0;
+
         for (int i = 0; i < line.Length; i++)
         {
-            if (line[i] == '"') inQuote = !inQuote;
-            else if (line[i] == ',' && !inQuote)
+            char c = line[i];
+            if (inQuote)
             {
-                result.Add(line[start..i]);
-                start = i + 1;
+                if (c == '"')
+                {
+                    // RFC 4180: "" はエスケープされた " として扱う
+                    if (i + 1 < line.Length && line[i + 1] == '"')
+                    {
+                        field.Append('"');
+                        i++; // 次の " をスキップ
+                    }
+                    else
+                    {
+                        inQuote = false;
+                    }
+                }
+                else
+                {
+                    field.Append(c);
+                }
+            }
+            else
+            {
+                if (c == '"')
+                {
+                    inQuote = true;
+                }
+                else if (c == ',')
+                {
+                    result.Add(field.ToString());
+                    field.Clear();
+                }
+                else
+                {
+                    field.Append(c);
+                }
             }
         }
-        result.Add(line[start..]);
+        result.Add(field.ToString());
         return result.ToArray();
     }
 
-    private static GpuInfo? DetectGpuLinux(ILogger? logger)
+    private static GpuInfo? DetectGpuLinux()
     {
         try
         {
@@ -133,12 +169,12 @@ internal static class GpuDetector
         }
         catch (Exception ex)
         {
-            logger?.LogDebug(ex, "Linux GPU検出エラー");
+            _logger.Debug($"Linux GPU検出エラー: {ex.Message}");
         }
         return null;
     }
 
-    private static GpuInfo? DetectGpuMacOs(ILogger? logger)
+    private static GpuInfo? DetectGpuMacOs()
     {
         // macOSはApple Silicon (Metal) を使用。バリアント選択は不要（単一バイナリ）。
         try
@@ -153,12 +189,12 @@ internal static class GpuDetector
         }
         catch (Exception ex)
         {
-            logger?.LogDebug(ex, "macOS GPU検出エラー");
+            _logger.Debug($"macOS GPU検出エラー: {ex.Message}");
         }
         return null;
     }
 
-    private static bool DetectNpu(ILogger? logger)
+    private static bool DetectNpu()
     {
         // Windows NPU検出: PowerShell CIM使用（wmic廃止対応）
         try
@@ -173,7 +209,7 @@ internal static class GpuDetector
         }
     }
 
-    private static bool IsDiscreteGpu(string vendor, string name)
+    private static bool IsDiscreteGpu(string vendor)
     {
         string v = vendor.ToUpperInvariant();
         return v.Contains("NVIDIA") || v.Contains("AMD") || v.Contains("ADVANCED MICRO");
@@ -193,7 +229,11 @@ internal static class GpuDetector
         };
         process.Start();
         string output = process.StandardOutput.ReadToEnd();
-        process.WaitForExit(5000);
+        if (!process.WaitForExit(5000))
+        {
+            try { process.Kill(); } catch { /* ベストエフォート */ }
+            return output;
+        }
         return output;
     }
 }

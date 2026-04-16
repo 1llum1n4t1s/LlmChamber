@@ -2,7 +2,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Formats.Tar;
 using System.Net.Http;
-using Microsoft.Extensions.Logging;
+using SuperLightLogger;
 
 namespace LlmChamber.Internal;
 
@@ -17,12 +17,11 @@ internal sealed class OllamaDownloader
     private const int DownloadBufferSize = 81920; // 80KB
 
     private readonly HttpClient _httpClient;
-    private readonly ILogger<OllamaDownloader> _logger;
+    private static readonly ILog _logger = LogManager.GetLogger<OllamaDownloader>();
 
-    public OllamaDownloader(HttpClient httpClient, ILogger<OllamaDownloader> logger)
+    public OllamaDownloader(HttpClient httpClient)
     {
         _httpClient = httpClient;
-        _logger = logger;
     }
 
     /// <summary>
@@ -47,7 +46,7 @@ internal sealed class OllamaDownloader
         string? existing = FindExistingBinary(targetDirectory, version, variant);
         if (existing is not null)
         {
-            _logger.LogDebug("Ollamaバイナリが既に存在します: {Path} (v{Version})", existing, version);
+            _logger.Debug($"Ollamaバイナリが既に存在します: {existing} (v{version})");
             return existing;
         }
 
@@ -77,7 +76,7 @@ internal sealed class OllamaDownloader
         string versionMarkerPath = Path.Combine(targetDirectory, ".version");
         await File.WriteAllTextAsync(versionMarkerPath, $"{version}:{variant}", cancellationToken);
 
-        _logger.LogInformation("Ollamaランタイム v{Version} のインストール完了: {Path}", version, binaryPath);
+        _logger.Info($"Ollamaランタイム v{version} のインストール完了: {binaryPath}");
         progress?.Report(new DownloadProgress(0, null, 100, "インストール完了"));
 
         return binaryPath;
@@ -102,7 +101,7 @@ internal sealed class OllamaDownloader
         string downloadUrl = string.Format(GithubReleaseUrlTemplate, version, downloadFileName);
         string label = phaseLabel ?? downloadFileName;
 
-        _logger.LogInformation("Ollamaランタイムをダウンロード中: {Url}", downloadUrl);
+        _logger.Info($"Ollamaランタイムをダウンロード中: {downloadUrl}");
         progress?.Report(new DownloadProgress(0, null, null, $"ダウンロード開始: {label}"));
 
         var (_, archiveExt) = PlatformInfo.GetOllamaBinaryInfo(os, arch, variant);
@@ -214,7 +213,8 @@ internal sealed class OllamaDownloader
 
         if (archivePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
         {
-            ZipFile.ExtractToDirectory(archivePath, extractDir);
+            // ZipFileに非同期APIがないため、スレッドプールにオフロード
+            await Task.Run(() => ZipFile.ExtractToDirectory(archivePath, extractDir), cancellationToken);
         }
         else if (archivePath.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase))
         {

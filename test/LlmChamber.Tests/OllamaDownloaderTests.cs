@@ -41,8 +41,7 @@ public class OllamaDownloaderTests
         {
             Directory.CreateDirectory(tempDir);
             var httpClient = new System.Net.Http.HttpClient();
-            var downloader = new OllamaDownloader(httpClient,
-                Microsoft.Extensions.Logging.Abstractions.NullLogger<OllamaDownloader>.Instance);
+            var downloader = new OllamaDownloader(httpClient);
 
             string? result = downloader.FindExistingBinary(tempDir);
             Assert.Null(result);
@@ -67,8 +66,7 @@ public class OllamaDownloaderTests
             File.WriteAllText(Path.Combine(runtimeDir, execName), "dummy");
 
             var httpClient = new System.Net.Http.HttpClient();
-            var downloader = new OllamaDownloader(httpClient,
-                Microsoft.Extensions.Logging.Abstractions.NullLogger<OllamaDownloader>.Instance);
+            var downloader = new OllamaDownloader(httpClient);
 
             string? result = downloader.FindExistingBinary(tempDir, "0.20.2");
             Assert.NotNull(result);
@@ -93,8 +91,7 @@ public class OllamaDownloaderTests
             File.WriteAllText(Path.Combine(runtimeDir, execName), "dummy");
 
             var httpClient = new System.Net.Http.HttpClient();
-            var downloader = new OllamaDownloader(httpClient,
-                Microsoft.Extensions.Logging.Abstractions.NullLogger<OllamaDownloader>.Instance);
+            var downloader = new OllamaDownloader(httpClient);
 
             string? result = downloader.FindExistingBinary(tempDir, "0.20.2");
             Assert.Null(result);

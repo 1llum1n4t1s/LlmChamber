@@ -147,14 +147,22 @@ internal sealed class ChatSession : IChatSession
     {
         if (Options.MaxHistoryMessages is not { } max) return;
 
-        // システムメッセージ以外をカウント
-        int nonSystemCount = _history.Count(m => m.Role != ChatRole.System);
-        while (nonSystemCount > max)
+        int systemCount = _history.Count(m => m.Role == ChatRole.System);
+        int excess = _history.Count - systemCount - max;
+        if (excess <= 0) return;
+
+        int removed = 0;
+        for (int i = 0; removed < excess && i < _history.Count;)
         {
-            int idx = _history.FindIndex(m => m.Role != ChatRole.System);
-            if (idx < 0) break;
-            _history.RemoveAt(idx);
-            nonSystemCount--;
+            if (_history[i].Role != ChatRole.System)
+            {
+                _history.RemoveAt(i);
+                removed++;
+            }
+            else
+            {
+                i++;
+            }
         }
     }
 

@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using LlmChamber.Internal.Api;
-using Microsoft.Extensions.Logging;
+using SuperLightLogger;
 
 namespace LlmChamber.Internal;
 
@@ -16,12 +16,11 @@ namespace LlmChamber.Internal;
 internal sealed class OllamaApiClient
 {
     private readonly HttpClient _httpClient;
-    private readonly ILogger<OllamaApiClient> _logger;
+    private static readonly ILog _logger = LogManager.GetLogger<OllamaApiClient>();
 
-    public OllamaApiClient(HttpClient httpClient, ILogger<OllamaApiClient> logger)
+    public OllamaApiClient(HttpClient httpClient)
     {
         _httpClient = httpClient;
-        _logger = logger;
     }
 
     /// <summary>APIのベースアドレスを設定する。</summary>
@@ -173,9 +172,10 @@ internal sealed class OllamaApiClient
     /// <summary>モデルを削除する。</summary>
     public async Task DeleteModelAsync(string modelTag, CancellationToken cancellationToken = default)
     {
+        var deleteRequest = new DeleteRequest { Name = modelTag };
         var request = new HttpRequestMessage(HttpMethod.Delete, "/api/delete")
         {
-            Content = JsonContent.Create(new { name = modelTag }),
+            Content = JsonContent.Create(deleteRequest, OllamaJsonContext.Instance.DeleteRequest),
         };
         var response = await _httpClient.SendAsync(request, cancellationToken);
         response.EnsureSuccessStatusCode();

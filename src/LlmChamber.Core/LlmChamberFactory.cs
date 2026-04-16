@@ -1,7 +1,5 @@
 using System.Net.Http;
 using LlmChamber.Internal;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace LlmChamber;
@@ -21,26 +19,22 @@ public static class LlmChamberFactory
         var options = new LlmChamberOptions();
         configure?.Invoke(options);
 
-        var loggerFactory = NullLoggerFactory.Instance;
-
         // ダウンローダーとAPIクライアントで別のHttpClientを使用する
         // （HttpClient.BaseAddressはリクエスト送信後に変更できないため）
         var downloadHttpClient = new HttpClient();
         var apiHttpClient = new HttpClient();
 
-        var downloader = new OllamaDownloader(downloadHttpClient, loggerFactory.CreateLogger<OllamaDownloader>());
+        var downloader = new OllamaDownloader(downloadHttpClient);
         var wrappedOptions = Options.Create(options);
-        var processManager = new OllamaProcessManager(loggerFactory.CreateLogger<OllamaProcessManager>(), wrappedOptions);
-        var apiClient = new OllamaApiClient(apiHttpClient, loggerFactory.CreateLogger<OllamaApiClient>());
-        var runtimeManager = new RuntimeManager(downloader, apiClient, processManager, wrappedOptions,
-            loggerFactory.CreateLogger<RuntimeManager>());
+        var processManager = new OllamaProcessManager(wrappedOptions);
+        var apiClient = new OllamaApiClient(apiHttpClient);
+        var runtimeManager = new RuntimeManager(downloader, apiClient, processManager, wrappedOptions);
 
         return new LocalLlm(
-            Options.Create(options),
+            wrappedOptions,
             downloader,
             processManager,
             apiClient,
-            runtimeManager,
-            loggerFactory.CreateLogger<LocalLlm>());
+            runtimeManager);
     }
 }

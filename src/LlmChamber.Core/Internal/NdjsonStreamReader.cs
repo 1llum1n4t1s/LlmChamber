@@ -10,21 +10,17 @@ namespace LlmChamber.Internal;
 /// </summary>
 internal static class NdjsonStreamReader
 {
-    /// <summary>StreamReaderから行単位でJSONオブジェクトをデシリアライズして返す。</summary>
+    /// <summary>StreamReaderから行単位でJSONオブジェクトをデシリアライズして返す（テスト用）。</summary>
     public static async IAsyncEnumerable<T> ReadAsync<T>(
         StreamReader reader,
         JsonSerializerOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+        await foreach (string line in ReadLinesAsync(reader, cancellationToken))
         {
-            if (string.IsNullOrWhiteSpace(line)) continue;
-
             T? item = JsonSerializer.Deserialize<T>(line, options);
             if (item is not null)
-            {
                 yield return item;
-            }
         }
     }
 

@@ -77,7 +77,6 @@ public class ChatSessionTests
     {
         // テスト用に最低限のApiClientを作成（実際のAPI呼び出しはしない）
         var httpClient = new System.Net.Http.HttpClient();
-        return new OllamaApiClient(httpClient,
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<OllamaApiClient>.Instance);
+        return new OllamaApiClient(httpClient);
     }
 }

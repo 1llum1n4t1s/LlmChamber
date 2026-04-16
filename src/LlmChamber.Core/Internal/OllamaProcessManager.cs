@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using SuperLightLogger;
 
 namespace LlmChamber.Internal;
 
@@ -13,15 +13,14 @@ namespace LlmChamber.Internal;
 internal sealed class OllamaProcessManager : IAsyncDisposable, IDisposable
 {
     private readonly SemaphoreSlim _startLock = new(1, 1);
-    private readonly ILogger<OllamaProcessManager> _logger;
+    private static readonly ILog _logger = LogManager.GetLogger<OllamaProcessManager>();
     private readonly LlmChamberOptions _options;
     private Process? _process;
     private int _port;
-    private bool _disposed;
+    private volatile bool _disposed;
 
-    public OllamaProcessManager(ILogger<OllamaProcessManager> logger, IOptions<LlmChamberOptions> options)
+    public OllamaProcessManager(IOptions<LlmChamberOptions> options)
     {
-        _logger = logger;
         _options = options.Value;
     }
 
@@ -50,7 +49,7 @@ internal sealed class OllamaProcessManager : IAsyncDisposable, IDisposable
 
             Directory.CreateDirectory(modelDir);
 
-            _logger.LogInformation("Ollamaプロセスを起動します: port={Port}, models={ModelDir}", _port, modelDir);
+            _logger.Info($"Ollamaプロセスを起動します: port={_port}, models={modelDir}");
 
             var startInfo = new ProcessStartInfo
             {
@@ -68,11 +67,11 @@ internal sealed class OllamaProcessManager : IAsyncDisposable, IDisposable
             _process = new Process { StartInfo = startInfo };
             _process.OutputDataReceived += (_, e) =>
             {
-                if (e.Data is not null) _logger.LogDebug("[ollama] {Line}", e.Data);
+                if (e.Data is not null) _logger.Debug($"[ollama] {e.Data}");
             };
             _process.ErrorDataReceived += (_, e) =>
             {
-                if (e.Data is not null) _logger.LogDebug("[ollama:err] {Line}", e.Data);
+                if (e.Data is not null) _logger.Debug($"[ollama:err] {e.Data}");
             };
 
             if (!_process.Start())
@@ -93,14 +92,14 @@ internal sealed class OllamaProcessManager : IAsyncDisposable, IDisposable
             catch
             {
                 // ヘルスチェック失敗時はプロセスをクリーンアップして再試行可能にする
-                _logger.LogWarning("Ollamaヘルスチェック失敗。プロセスをクリーンアップします。");
+                _logger.Warn("Ollamaヘルスチェック失敗。プロセスをクリーンアップします。");
                 try { _process.Kill(entireProcessTree: true); } catch { /* ベストエフォート */ }
                 _process.Dispose();
                 _process = null;
                 throw;
             }
 
-            _logger.LogInformation("Ollamaプロセスが準備完了: PID={Pid}, Port={Port}", _process.Id, _port);
+            _logger.Info($"Ollamaプロセスが準備完了: PID={_process.Id}, Port={_port}");
         }
         finally
         {
@@ -113,7 +112,7 @@ internal sealed class OllamaProcessManager : IAsyncDisposable, IDisposable
     {
         if (_process is null || _process.HasExited) return;
 
-        _logger.LogInformation("Ollamaプロセスを停止します: PID={Pid}", _process.Id);
+        _logger.Info($"Ollamaプロセスを停止します: PID={_process.Id}");
 
         try
         {
@@ -122,7 +121,7 @@ internal sealed class OllamaProcessManager : IAsyncDisposable, IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Ollamaプロセスの停止中にエラーが発生しました。");
+            _logger.Warn($"Ollamaプロセスの停止中にエラーが発生しました。: {ex.Message}");
         }
         finally
         {
@@ -145,7 +144,7 @@ internal sealed class OllamaProcessManager : IAsyncDisposable, IDisposable
                 var response = await client.GetAsync("/api/version", cts.Token);
                 if (response.IsSuccessStatusCode)
                 {
-                    _logger.LogDebug("Ollamaヘルスチェック成功");
+                    _logger.Debug("Ollamaヘルスチェック成功");
                     return;
                 }
             }

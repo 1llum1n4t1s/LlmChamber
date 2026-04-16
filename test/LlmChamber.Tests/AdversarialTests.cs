@@ -7,7 +7,7 @@ using LlmChamber;
 using LlmChamber.Internal;
 using LlmChamber.Internal.Api;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
+
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using Xunit;
@@ -29,7 +29,7 @@ public class AdversarialTests
         var httpClient = handler is not null
             ? new HttpClient(handler)
             : new HttpClient();
-        return new OllamaApiClient(httpClient, NullLogger<OllamaApiClient>.Instance);
+        return new OllamaApiClient(httpClient);
     }
 
     /// <summary>テスト用のOllamaDownloaderを作成する。</summary>
@@ -38,7 +38,7 @@ public class AdversarialTests
         var httpClient = handler is not null
             ? new HttpClient(handler)
             : new HttpClient();
-        return new OllamaDownloader(httpClient, NullLogger<OllamaDownloader>.Instance);
+        return new OllamaDownloader(httpClient);
     }
 
     /// <summary>テスト用のOllamaProcessManagerを作成する。</summary>
@@ -46,7 +46,6 @@ public class AdversarialTests
     {
         opts ??= new LlmChamberOptions();
         return new OllamaProcessManager(
-            NullLogger<OllamaProcessManager>.Instance,
             Options.Create(opts));
     }
 
@@ -67,8 +66,7 @@ public class AdversarialTests
             downloader,
             processManager,
             apiClient,
-            runtimeManager,
-            NullLogger<LocalLlm>.Instance);
+            runtimeManager);
     }
 
     /// <summary>MemoryStreamからStreamReaderを作成する。</summary>

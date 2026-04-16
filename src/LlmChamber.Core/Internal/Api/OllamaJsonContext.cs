@@ -15,6 +15,7 @@ namespace LlmChamber.Internal.Api;
 [JsonSerializable(typeof(EmbedResponse))]
 [JsonSerializable(typeof(OllamaMessage))]
 [JsonSerializable(typeof(OllamaOptions))]
+[JsonSerializable(typeof(DeleteRequest))]
 [JsonSerializable(typeof(VersionResponse))]
 internal partial class OllamaJsonContext : JsonSerializerContext
 {
