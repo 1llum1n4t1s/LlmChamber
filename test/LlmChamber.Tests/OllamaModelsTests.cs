@@ -6,9 +6,11 @@ namespace LlmChamber.Tests;
 public class OllamaModelsTests
 {
     [Fact]
-    public void Presets_Contains4Models()
+    public void Presets_ContainsTextAndVisionModels()
     {
-        Assert.Equal(4, OllamaModels.Presets.Count);
+        // 4 テキストモデル (gemma4-e2b/e4b, qwen3.5-2b, phi4-mini)
+        // + 3 マルチモーダル Vision モデル (gemma3-4b, qwen2.5vl-3b, llava-7b)
+        Assert.Equal(7, OllamaModels.Presets.Count);
     }
 
     [Theory]
@@ -16,6 +18,9 @@ public class OllamaModelsTests
     [InlineData("gemma4-e4b", "gemma4:e4b")]
     [InlineData("qwen3.5-2b", "qwen3:2b")]
     [InlineData("phi4-mini", "phi4-mini")]
+    [InlineData("gemma3-4b", "gemma3:4b")]
+    [InlineData("qwen2.5vl-3b", "qwen2.5vl:3b")]
+    [InlineData("llava-7b", "llava:7b")]
     public void FindPreset_ById_ReturnsCorrectPreset(string id, string expectedTag)
     {
         var preset = OllamaModels.FindPreset(id);

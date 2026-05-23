@@ -20,9 +20,18 @@ public sealed record ChatMessage(
     string Content,
     DateTimeOffset Timestamp)
 {
+    /// <summary>
+    /// 添付画像（PNG/JPEG等のバイナリ）。multimodal モデル使用時のみ有効。
+    /// </summary>
+    public IReadOnlyList<byte[]>? Images { get; init; }
+
     /// <summary>ユーザーメッセージを作成する。</summary>
     public static ChatMessage FromUser(string content) =>
         new(ChatRole.User, content, DateTimeOffset.UtcNow);
+
+    /// <summary>画像付きユーザーメッセージを作成する。multimodal モデル使用時に有効。</summary>
+    public static ChatMessage FromUser(string content, IReadOnlyList<byte[]>? images) =>
+        new(ChatRole.User, content, DateTimeOffset.UtcNow) { Images = images };
 
     /// <summary>アシスタントメッセージを作成する。</summary>
     public static ChatMessage FromAssistant(string content) =>

@@ -41,14 +41,20 @@ internal sealed class ChatSession : IChatSession
         }
     }
 
+    public IAsyncEnumerable<string> SendAsync(
+        string message,
+        CancellationToken cancellationToken = default)
+        => SendAsync(message, images: null, cancellationToken);
+
     public async IAsyncEnumerable<string> SendAsync(
         string message,
+        IReadOnlyList<byte[]>? images,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (_ensureInitialized is not null)
             await _ensureInitialized(cancellationToken);
 
-        AddUserMessage(message);
+        AddUserMessage(message, images);
         bool success = false;
 
         try
@@ -73,14 +79,20 @@ internal sealed class ChatSession : IChatSession
         }
     }
 
+    public Task<string> SendCompleteAsync(
+        string message,
+        CancellationToken cancellationToken = default)
+        => SendCompleteAsync(message, images: null, cancellationToken);
+
     public async Task<string> SendCompleteAsync(
         string message,
+        IReadOnlyList<byte[]>? images,
         CancellationToken cancellationToken = default)
     {
         if (_ensureInitialized is not null)
             await _ensureInitialized(cancellationToken);
 
-        AddUserMessage(message);
+        AddUserMessage(message, images);
 
         try
         {
@@ -110,11 +122,13 @@ internal sealed class ChatSession : IChatSession
         }
     }
 
-    private void AddUserMessage(string content)
+    private void AddUserMessage(string content, IReadOnlyList<byte[]>? images = null)
     {
         lock (_historyLock)
         {
-            _history.Add(ChatMessage.FromUser(content));
+            _history.Add(images is { Count: > 0 }
+                ? ChatMessage.FromUser(content, images)
+                : ChatMessage.FromUser(content));
         }
     }
 
@@ -190,6 +204,7 @@ internal sealed class ChatSession : IChatSession
                     _ => "user",
                 },
                 Content = m.Content,
+                Images = OllamaApiClient.EncodeImages(m.Images),
             }).ToList();
         }
     }

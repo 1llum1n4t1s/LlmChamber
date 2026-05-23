@@ -43,6 +43,7 @@ internal sealed class OllamaApiClient
     /// <summary>テキスト生成（ストリーミング）。</summary>
     public async IAsyncEnumerable<string> GenerateStreamAsync(
         string model, string prompt, InferenceOptions? options = null,
+        IReadOnlyList<byte[]>? images = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var request = new GenerateRequest
@@ -51,6 +52,7 @@ internal sealed class OllamaApiClient
             Prompt = prompt,
             Stream = true,
             Options = OllamaOptions.FromInferenceOptions(options),
+            Images = EncodeImages(images),
         };
 
         await foreach (var chunk in PostStreamAsync<GenerateRequest, GenerateResponse>(
@@ -67,6 +69,7 @@ internal sealed class OllamaApiClient
     /// <summary>テキスト生成（一括）。</summary>
     public async Task<string> GenerateCompleteAsync(
         string model, string prompt, InferenceOptions? options = null,
+        IReadOnlyList<byte[]>? images = null,
         CancellationToken cancellationToken = default)
     {
         var request = new GenerateRequest
@@ -75,6 +78,7 @@ internal sealed class OllamaApiClient
             Prompt = prompt,
             Stream = false,
             Options = OllamaOptions.FromInferenceOptions(options),
+            Images = EncodeImages(images),
         };
 
         var response = await PostJsonAsync<GenerateRequest, GenerateResponse>(
@@ -82,6 +86,19 @@ internal sealed class OllamaApiClient
             OllamaJsonContext.Instance.GenerateResponse, cancellationToken);
 
         return response.Response;
+    }
+
+    /// <summary>byte[] 画像を Ollama API が要求する Base64 文字列に変換する。</summary>
+    internal static IReadOnlyList<string>? EncodeImages(IReadOnlyList<byte[]>? images)
+    {
+        if (images is null || images.Count == 0) return null;
+        var encoded = new List<string>(images.Count);
+        foreach (var image in images)
+        {
+            if (image is null || image.Length == 0) continue;
+            encoded.Add(Convert.ToBase64String(image));
+        }
+        return encoded.Count > 0 ? encoded : null;
     }
 
     /// <summary>チャット（ストリーミング）。</summary>

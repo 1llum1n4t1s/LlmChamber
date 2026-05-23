@@ -43,4 +43,9 @@ internal sealed class OllamaMessage
 
     [JsonPropertyName("content")]
     public required string Content { get; init; }
+
+    /// <summary>Base64エンコードされた画像のリスト（multimodal モデル用）。</summary>
+    [JsonPropertyName("images")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? Images { get; init; }
 }

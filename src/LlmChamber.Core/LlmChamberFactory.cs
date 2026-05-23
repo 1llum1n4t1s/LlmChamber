@@ -21,8 +21,9 @@ public static class LlmChamberFactory
 
         // ダウンローダーとAPIクライアントで別のHttpClientを使用する
         // （HttpClient.BaseAddressはリクエスト送信後に変更できないため）
-        var downloadHttpClient = new HttpClient();
-        var apiHttpClient = new HttpClient();
+        // Timeout = InfiniteTimeSpan: 大きなバイナリ/モデルDLや長時間推論は CancellationToken で制御する
+        var downloadHttpClient = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+        var apiHttpClient = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
 
         var downloader = new OllamaDownloader(downloadHttpClient);
         var wrappedOptions = Options.Create(options);
@@ -30,11 +31,14 @@ public static class LlmChamberFactory
         var apiClient = new OllamaApiClient(apiHttpClient);
         var runtimeManager = new RuntimeManager(downloader, apiClient, processManager, wrappedOptions);
 
+        // Factory 経由では HttpClient の所有権を LocalLlm に渡す（Dispose 時に HttpClient も Dispose する）
         return new LocalLlm(
             wrappedOptions,
             downloader,
             processManager,
             apiClient,
-            runtimeManager);
+            runtimeManager,
+            downloadHttpClient,
+            ownsDownloadHttpClient: true);
     }
 }

@@ -129,7 +129,7 @@ public class AdversarialTests2
 
         for (int i = 0; i < 50; i++)
         {
-            addUser.Invoke(session, [$"user-{i}"]);
+            addUser.Invoke(session, [$"user-{i}", null]);
             addAssistant.Invoke(session, [$"assistant-{i}"]);
         }
 
@@ -160,7 +160,7 @@ public class AdversarialTests2
 
         for (int i = 0; i < 10; i++)
         {
-            addUser.Invoke(session, [$"user-{i}"]);
+            addUser.Invoke(session, [$"user-{i}", null]);
             addAssistant.Invoke(session, [$"assistant-{i}"]);
         }
 
@@ -229,7 +229,7 @@ public class AdversarialTests2
             for (int j = 0; j < 20; j++)
             {
                 cts.Token.ThrowIfCancellationRequested();
-                addUser.Invoke(session, [$"user-{i}-{j}"]);
+                addUser.Invoke(session, [$"user-{i}-{j}", null]);
                 addAssistant.Invoke(session, [$"assistant-{i}-{j}"]);
             }
         }, cts.Token)).ToArray();
@@ -326,8 +326,8 @@ public class AdversarialTests2
 
         var addUser = typeof(ChatSession).GetMethod("AddUserMessage",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
-        addUser.Invoke(session, ["hello"]);
-        addUser.Invoke(session, ["world"]);
+        addUser.Invoke(session, ["hello", null]);
+        addUser.Invoke(session, ["world", null]);
 
         session.ClearHistory();
 
@@ -348,9 +348,9 @@ public class AdversarialTests2
 
         var addUser = typeof(ChatSession).GetMethod("AddUserMessage",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
-        addUser.Invoke(session, ["first"]);
+        addUser.Invoke(session, ["first", null]);
         session.ClearHistory();
-        addUser.Invoke(session, ["after-clear"]);
+        addUser.Invoke(session, ["after-clear", null]);
 
         var history = session.History;
         Assert.Single(history);

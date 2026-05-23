@@ -16,6 +16,11 @@ internal sealed class GenerateRequest
     [JsonPropertyName("options")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public OllamaOptions? Options { get; init; }
+
+    /// <summary>Base64エンコードされた画像のリスト（multimodal モデル用）。</summary>
+    [JsonPropertyName("images")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? Images { get; init; }
 }
 
 internal sealed class GenerateResponse

@@ -66,7 +66,9 @@ public class AdversarialTests
             downloader,
             processManager,
             apiClient,
-            runtimeManager);
+            runtimeManager,
+            new HttpClient(),
+            ownsDownloadHttpClient: true);
     }
 
     /// <summary>MemoryStreamからStreamReaderを作成する。</summary>

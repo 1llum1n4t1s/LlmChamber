@@ -8,8 +8,10 @@
 ## 特徴
 
 - **NuGet一発で動く** — `dotnet add package LlmChamber` だけ。Python不要、GPU不要
-- **環境汚染なし** — Ollamaバイナリをアプリローカルに自動配置。グローバルインストール不要
-- **モデル自動管理** — 初回実行時にOllama DL + モデルpullが全て自動
+- **環境汚染なし** — Ollama / Whisper / Piper / FFmpeg バイナリをアプリローカルに自動配置。グローバルインストール不要
+- **モデル自動管理** — 初回実行時にランタイムDL + モデルpullが全て自動
+- **マルチモーダル全部入り** — Text + Vision (画像) + Speech (音声入出力) + Video (動画解析) を 1 パッケージで提供
+- **オプトイン・ゼロコスト** — `UseSpeech()` / `UseMedia()` を呼ぶまで Whisper/Piper/FFmpeg はダウンロードされず、メモリも消費しない
 - **型安全なC# API** — `IAsyncEnumerable<string>` でストリーミング応答
 - **GPU自動検出** — Nvidia(CUDA) / AMD(ROCm) / Intel / NPU を自動検出して最適なバイナリを選択
 - **UIコントロール付き** — WPF / Avalonia / WinForms / MAUI 用のチャットコントロールを同梱
@@ -103,12 +105,22 @@ UIパッケージにはCoreが内蔵されているため、追加でCoreパッ�
 
 ## 組込みモデルプリセット
 
+### テキストモデル
+
 | プリセットID | モデル | DLサイズ | 推奨RAM | 特徴 |
 |---|---|---|---|---|
-| `gemma4-e2b` | Gemma 4 E2B | ~3 GB | 5 GB | 最軽量。CPU推論に最適。マルチモーダル |
-| `gemma4-e4b` | Gemma 4 E4B | ~5 GB | 8 GB | 中型。音声入力対応 |
+| `gemma4-e2b` | Gemma 4 E2B | ~3 GB | 5 GB | 最軽量。CPU推論に最適 |
+| `gemma4-e4b` | Gemma 4 E4B | ~5 GB | 8 GB | 中型。バランス型 |
 | `qwen3.5-2b` | Qwen 3.5 2B | ~2 GB | 4 GB | 日本語・多言語が優秀 |
 | `phi4-mini` | Phi-4 Mini | ~3 GB | 6 GB | 数学・コーディングに強い |
+
+### マルチモーダル Vision モデル（画像入力対応）
+
+| プリセットID | モデル | DLサイズ | 推奨RAM | 特徴 |
+|---|---|---|---|---|
+| `gemma3-4b` | Gemma 3 4B (Vision) | ~3 GB | 6 GB | Google製。汎用マルチモーダル |
+| `qwen2.5vl-3b` | Qwen 2.5 VL 3B (Vision) | ~3 GB | 6 GB | OCR・画像理解に強い |
+| `llava-7b` | LLaVA 7B (Vision) | ~4 GB | 8 GB | 定番Vision LLM |
 
 カスタムモデルも直接Ollamaタグで指定可能:
 
@@ -151,6 +163,99 @@ llm.ModelDownloadProgress += (_, p) =>
 
 await llm.InitializeAsync();
 ```
+
+## 🖼️ 画像入力 (Vision)
+
+multimodal モデルを使えば画像 + テキストで質問できます。**追加のNuGet依存ゼロ**:
+
+```csharp
+await using var llm = LlmChamberFactory.Create(o => o.DefaultModel = "gemma3-4b");
+
+byte[] imageBytes = await File.ReadAllBytesAsync("photo.jpg");
+
+// テキスト生成（GenerateAsync）に画像を渡す
+await foreach (var chunk in llm.GenerateAsync(
+    "この画像に何が写っていますか？",
+    images: new[] { imageBytes }))
+{
+    Console.Write(chunk);
+}
+
+// チャットセッションでも画像を送れる
+var session = llm.CreateChatSession();
+await foreach (var chunk in session.SendAsync(
+    "詳しく説明してください",
+    images: new[] { imageBytes }))
+{
+    Console.Write(chunk);
+}
+```
+
+## 🎤🔊 音声入出力 (Speech)
+
+`UseSpeech()` を呼ぶと whisper.cpp と Piper のバイナリ・モデルが自動DLされます。**呼ぶまでは何もダウンロードされません**:
+
+```csharp
+await using var llm = LlmChamberFactory.Create();
+var speech = llm.UseSpeech(new SpeechOptions
+{
+    WhisperModel = WhisperModelSize.Small,  // tiny/base/small/medium/large から選択
+    DefaultVoice = "ja_JP-takumi-medium",   // Piper voice (HuggingFace から自動DL)
+});
+
+// STT: 音声ファイル → テキスト
+var result = await speech.TranscribeFileAsync("input.wav");
+Console.WriteLine($"言語: {result.DetectedLanguage}");
+Console.WriteLine($"全文: {result.Text}");
+foreach (var seg in result.Segments ?? Array.Empty<TranscriptionSegment>())
+{
+    Console.WriteLine($"[{seg.Start:hh\\:mm\\:ss}] {seg.Text}");
+}
+
+// TTS: テキスト → WAV
+byte[] wavBytes = await speech.SpeakAsync("こんにちは、クロちゃんです。");
+await File.WriteAllBytesAsync("output.wav", wavBytes);
+
+// ダウンロード進捗を購読
+speech.ResourceDownloadProgress += (_, p) =>
+    Console.WriteLine($"[{p.Status}] {p.Percentage:F1}%");
+```
+
+サポートプラットフォーム:
+- **Whisper STT**: Windows AMD64 は自動DL対応。Linux/macOS は `SpeechOptions.WhisperBinaryPath` で whisper-cli への明示パス指定が必要
+- **Piper TTS**: Windows/Linux x64・arm64、macOS x64・arm64 全て自動DL対応
+
+## 🎬 動画解析 (Media)
+
+`UseMedia()` で FFmpeg が自動DL されます。フレーム抽出 → Vision モデル解析を `IAsyncEnumerable` でストリーミング:
+
+```csharp
+await using var llm = LlmChamberFactory.Create(o => o.DefaultModel = "gemma3-4b");
+var media = llm.UseMedia();
+
+// 動画を1秒ごとに切り出して各フレームをVisionモデルで解析
+await foreach (var frame in media.AnalyzeAsync("video.mp4",
+    prompt: "この動画はどんなシーンですか？",
+    options: new VideoAnalysisOptions
+    {
+        FrameIntervalSeconds = 2.0,  // 2秒ごとに1フレーム
+        MaxFrames = 30,              // 最大30枚
+        MaxFrameWidth = 1280,
+    }))
+{
+    Console.WriteLine($"[{frame.Timestamp}] {frame.Description}");
+}
+
+// 解析なしのフレーム抽出のみ
+await foreach (var frame in media.ExtractFramesAsync("video.mp4"))
+{
+    await File.WriteAllBytesAsync($"frame-{frame.FrameIndex:D5}.jpg", frame.ImageBytes);
+}
+```
+
+サポートプラットフォーム:
+- **FFmpeg**: Windows x64 / Linux x64・arm64 は BtbN/FFmpeg-Builds から自動DL
+- macOS は `brew install ffmpeg` 推奨、`MediaOptions.FFmpegBinaryPath` で明示パス指定
 
 ## WPF / Avalonia でのUI利用
 

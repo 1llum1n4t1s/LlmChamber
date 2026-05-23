@@ -24,8 +24,11 @@ public static class ServiceCollectionExtensions
         // ダウンローダーとAPIクライアントで別のHttpClientを使用する
         // （HttpClient.BaseAddressはリクエスト送信後に変更できないため）
         // TryAddで登録し、消費者が事前にカスタムHttpClientを登録していれば上書きしない
-        services.TryAddKeyedSingleton<HttpClient>(LlmChamberHttpClients.Downloader);
-        services.TryAddKeyedSingleton<HttpClient>(LlmChamberHttpClients.Api);
+        // Timeout = InfiniteTimeSpan: 大きなバイナリ/モデルDLや長時間推論は CancellationToken で制御する
+        services.TryAddKeyedSingleton<HttpClient>(LlmChamberHttpClients.Downloader,
+            (_, _) => new HttpClient { Timeout = Timeout.InfiniteTimeSpan });
+        services.TryAddKeyedSingleton<HttpClient>(LlmChamberHttpClients.Api,
+            (_, _) => new HttpClient { Timeout = Timeout.InfiniteTimeSpan });
 
         services.AddSingleton(sp => new OllamaDownloader(
             sp.GetRequiredKeyedService<HttpClient>(LlmChamberHttpClients.Downloader)));
@@ -47,7 +50,8 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<OllamaDownloader>(),
             sp.GetRequiredService<OllamaProcessManager>(),
             sp.GetRequiredService<OllamaApiClient>(),
-            sp.GetRequiredService<IRuntimeManager>()));
+            sp.GetRequiredService<IRuntimeManager>(),
+            sp.GetRequiredKeyedService<HttpClient>(LlmChamberHttpClients.Downloader)));
 
         return services;
     }

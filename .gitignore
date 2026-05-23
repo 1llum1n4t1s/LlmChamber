@@ -23,3 +23,7 @@ Thumbs.db
 *.log
 TestResults/
 .claude/settings.local.json
+
+## Tooling (Claude Code / Serena MCP)
+.mcp.json
+.serena/
