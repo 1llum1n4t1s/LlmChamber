@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+このファイルは、このリポジトリで作業する Claude Code 向けのガイダンスを提供する。
 
 ## プロジェクト概要
 
@@ -28,9 +28,9 @@ net8.0 / net10.0 のマルチターゲット。WPF・WinFormsは `-windows` TFM�
 
 ## アーキテクチャ: CRDebugger方式（ソースインクルード）
 
-**重要**: `LlmChamber.Core` は `IsPackable=false` の内部プロジェクト。NuGetには公開されない。
+**重要**: `LlmChamber.Core` は `IsPackable=false` の内部プロジェクト。NuGetには公開せず、内部ソースとして各公開パッケージへ取り込む。
 
-各公開パッケージ（LlmChamber, .Wpf, .Avalonia, .WinForms, .Maui）が Core の `.cs` ファイルを `<Compile Include>` で直接取り込む。これにより NuGet に "Core" パッケージが出ない。
+各公開パッケージ（LlmChamber, .Wpf, .Avalonia, .WinForms, .Maui）が Core の `.cs` ファイルを `<Compile Include>` で直接取り込む。これにより NuGet に "Core" パッケージを出さない。
 
 ```xml
 <!-- 各公開パッケージの.csprojに記載 -->
@@ -39,7 +39,7 @@ net8.0 / net10.0 のマルチターゲット。WPF・WinFormsは `-windows` TFM�
          Exclude="..\LlmChamber.Core\obj\**;..\LlmChamber.Core\bin\**" />
 ```
 
-**結果**: コードは全て `src/LlmChamber.Core/` に書く。公開パッケージのプロジェクトにはUI固有コードのみ配置。
+**結果**: コードは全て `src/LlmChamber.Core/` に書く。公開パッケージのプロジェクトにはUI固有コードのみ配置する。
 
 ## NuGetパッケージ構成（5種）
 
@@ -102,7 +102,7 @@ net8.0 / net10.0 のマルチターゲット。WPF・WinFormsは `-windows` TFM�
 
 ## 重要な設計判断
 
-- **WPFプロジェクトでは `System.IO` 等の暗黙インポートが効かない**。Core内のコードには明示的 `using` が必要
+- **WPFプロジェクトでは `System.IO` 等の暗黙インポートが効かない**。Core内のコードには明示的 `using` を書く
 - **DI登録はファクトリデリゲート + Keyed Services方式**。`ILogger<T>` の有無に依存しない（GetService + NullLoggerフォールバック）。HttpClientは `LlmChamberHttpClients.Downloader` / `.Api` のキーで2つ登録（BaseAddress競合回避）
 - **Speech/Media 用 HttpClient は Downloader を再利用**。`LocalLlm` コンストラクタが `HttpClient` を受け取り、Speech/Media downloader へ流し込む
 - **ChatSession.SendAsync失敗時はユーザーメッセージをロールバック**する（ゴーストコンテキスト防止）
@@ -111,16 +111,16 @@ net8.0 / net10.0 のマルチターゲット。WPF・WinFormsは `-windows` TFM�
 - **ROCm版は2段階ダウンロード**（Windows/Linux）: Full版でollama本体を取得後、ROCm追加DLLを上書き展開。macOSではROCm非対応のためフォールバック
 - **UnsupportedPlatformExceptionはPlatformNotSupportedException派生**。`catch (PlatformNotSupportedException)` で捕捉可能
 - **Vision はコア標準・依存ゼロ**。Ollama multimodal API の `images` (Base64) フィールドだけで実現。`OllamaApiClient.EncodeImages(byte[][])` で変換
-- **Speech/Media は遅延初期化でゼロコスト**。`UseSpeech()` / `UseMedia()` 呼び出し自体ではバイナリDLしない（セッション作成のみ）。最初の `TranscribeAsync` / `SpeakAsync` / `AnalyzeAsync` 呼び出し時に `SemaphoreSlim` で1回だけ Whisper/Piper/FFmpeg バイナリ + モデルを取得する
-- **Speech は外部バイナリ自動DL**。Whisper.net や Piper の .NET NuGet バインディングは使わず、whisper.cpp / piper / ffmpeg の公式リリースバイナリをアプリローカル展開（Ollama と同じ思想）
+- **Speech/Media は遅延初期化でゼロコスト**。`UseSpeech()` / `UseMedia()` 呼び出し自体ではバイナリDLせず、セッション作成のみ行う。最初の `TranscribeAsync` / `SpeakAsync` / `AnalyzeAsync` 呼び出し時に `SemaphoreSlim` で1回だけ Whisper/Piper/FFmpeg バイナリ + モデルを取得する
+- **Speech は外部バイナリ自動DL**。.NET NuGet バインディング（Whisper.net や Piper）ではなく、whisper.cpp / piper / ffmpeg の公式リリースバイナリをアプリローカル展開して使う（Ollama と同じ思想）
 - **VideoSession.FrameAnalyzer デリゲート**で循環依存を回避: `LocalLlm.UseMedia` 内で Vision API (`GenerateCompleteAsync`) をラップしたデリゲートを `VideoSession` に注入
 
 ## Avalonia UI ルール
 
-- AXAML構文を使用（WPF XAMLではない）
-- `Trigger` / `DataTrigger` は存在しない → Style セレクターを使う
-- `Visibility.Collapsed` は存在しない → `IsVisible=false` を使う
-- `StyledProperty<T>` パターンを使用（DependencyPropertyではない）
+- AXAML構文を使う（WPF XAMLではなく AXAML で書く）
+- 要素の出し分けは Style セレクターで行う（`Trigger` / `DataTrigger` は存在しないため使わない）
+- 表示制御は `IsVisible=false` を使う（`Visibility.Collapsed` は存在しないため使わない）
+- `StyledProperty<T>` パターンを使う（DependencyPropertyではなく StyledProperty で定義する）
 
 ## テスト
 
