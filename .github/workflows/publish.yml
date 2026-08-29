@@ -6,6 +6,10 @@ on:
       - 'release/**'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   publish:
     runs-on: windows-latest
@@ -44,10 +48,40 @@ jobs:
       - name: Pack LlmChamber.Maui
         run: dotnet pack src/LlmChamber.Maui/LlmChamber.Maui.csproj -c Release --no-build -o artifacts
 
+      - name: Authenticate to NuGet.org
+        id: login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          user: ${{ vars.NUGET_USER }}
+
       - name: Publish to NuGet
-        run: |
-          $apiKey = $env:NUGET_API_KEY
-          .\publish.ps1
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: |
+          $packageIds = @(
+            'LlmChamber',
+            'LlmChamber.Wpf',
+            'LlmChamber.Avalonia',
+            'LlmChamber.WinForms',
+            'LlmChamber.Maui'
+          )
+          $packages = foreach ($packageId in $packageIds) {
+            $pattern = '^' + [regex]::Escape($packageId) + '\.\d.*\.nupkg$'
+            $matches = @(
+              Get-ChildItem -Path artifacts -Filter '*.nupkg' -File |
+                Where-Object Name -Match $pattern
+            )
+            if ($matches.Count -ne 1) {
+              Write-Error "Expected exactly one package for '$packageId', found $($matches.Count)."
+              exit 1
+            }
+            $matches[0]
+          }
+          foreach ($package in $packages) {
+            dotnet nuget push $package.FullName `
+              --api-key $env:NUGET_API_KEY `
+              --source https://api.nuget.org/v3/index.json `
+              --skip-duplicate
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
         shell: pwsh
