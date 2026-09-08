@@ -17,6 +17,6 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.100" />
-    <PackageReference Include="SuperLightLogger" Version="1.0.12" />
+    <PackageReference Include="SuperLightLogger" Version="1.0.15" />
   </ItemGroup>
 </Project>
