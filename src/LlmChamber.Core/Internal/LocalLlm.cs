@@ -25,6 +25,8 @@ internal sealed class LocalLlm : ILocalLlm
     private readonly HttpClient _downloadHttpClient;
     /// <summary>true なら DisposeAsync 時に _downloadHttpClient.Dispose() を呼ぶ。Factory 経由は所有、DI 経由は不所有。</summary>
     private readonly bool _ownsDownloadHttpClient;
+    // Factory が生成した API 用クライアントだけを所有する。DI 経由では null。
+    private readonly HttpClient? _ownedApiHttpClient;
     private readonly object _speechLock = new();
     /// <summary>volatile: lazy init double-check の outer 読み取りで ARM64 などのメモリモデル下でも stale を防ぐ。</summary>
     private volatile SpeechSession? _speechSession;
@@ -42,7 +44,8 @@ internal sealed class LocalLlm : ILocalLlm
         OllamaApiClient apiClient,
         IRuntimeManager runtimeManager,
         HttpClient downloadHttpClient,
-        bool ownsDownloadHttpClient = false)
+        bool ownsDownloadHttpClient = false,
+        HttpClient? ownedApiHttpClient = null)
     {
         _options = options.Value;
         _downloader = downloader;
@@ -50,6 +53,7 @@ internal sealed class LocalLlm : ILocalLlm
         _apiClient = apiClient;
         _downloadHttpClient = downloadHttpClient;
         _ownsDownloadHttpClient = ownsDownloadHttpClient;
+        _ownedApiHttpClient = ownedApiHttpClient;
         Runtime = runtimeManager;
     }
 
@@ -266,6 +270,7 @@ internal sealed class LocalLlm : ILocalLlm
 
         await _processManager.DisposeAsync();
         if (_ownsDownloadHttpClient) _downloadHttpClient.Dispose();
+        _ownedApiHttpClient?.Dispose();
         _initLock.Dispose();
     }
 
@@ -301,6 +306,7 @@ internal sealed class LocalLlm : ILocalLlm
 
         _processManager.Dispose();
         if (_ownsDownloadHttpClient) _downloadHttpClient.Dispose();
+        _ownedApiHttpClient?.Dispose();
         _initLock.Dispose();
     }
 }

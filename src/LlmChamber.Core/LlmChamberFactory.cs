@@ -39,6 +39,7 @@ public static class LlmChamberFactory
             apiClient,
             runtimeManager,
             downloadHttpClient,
-            ownsDownloadHttpClient: true);
+            ownsDownloadHttpClient: true,
+            ownedApiHttpClient: apiHttpClient);
     }
 }

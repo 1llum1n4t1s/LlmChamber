@@ -56,6 +56,11 @@ internal sealed class RuntimeManager : IRuntimeManager
             {
                 return await _apiClient.GetVersionAsync(cancellationToken);
             }
+            catch (OperationCanceledException)
+            {
+                // 呼び出し元のキャンセルはキャッシュフォールバックに変換しない
+                throw;
+            }
             catch
             {
                 // API失敗時はキャッシュから取得にフォールバック
