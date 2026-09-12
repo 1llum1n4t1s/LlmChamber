@@ -8,12 +8,12 @@
 ## 特徴
 
 - **NuGet一発で動く** — `dotnet add package LlmChamber` だけ。Python不要、GPU不要
-- **環境汚染なし** — Ollama / Whisper / Piper / FFmpeg バイナリをアプリローカルに自動配置。グローバルインストール不要
+- **グローバルインストール不要** — Ollama / Whisper / Piper / FFmpeg バイナリを指定キャッシュへ自動配置
 - **モデル自動管理** — 初回実行時にランタイムDL + モデルpullが全て自動
 - **マルチモーダル全部入り** — Text + Vision (画像) + Speech (音声入出力) + Video (動画解析) を 1 パッケージで提供
-- **オプトイン・ゼロコスト** — `UseSpeech()` / `UseMedia()` を呼ぶまで Whisper/Piper/FFmpeg はダウンロードされず、メモリも消費しない
+- **必要な機能だけ取得** — 音声・動画用バイナリとモデルは、各機能の初回処理時に取得
 - **型安全なC# API** — `IAsyncEnumerable<string>` でストリーミング応答
-- **GPU自動検出** — Nvidia(CUDA) / AMD(ROCm) / Intel / NPU を自動検出して最適なバイナリを選択
+- **GPU自動検出** — GPU ベンダーに応じて通常版または ROCm 版を選択。専用 NPU 推論には未対応
 - **UIコントロール付き** — WPF / Avalonia / WinForms / MAUI 用のチャットコントロールを同梱
 
 ## クイックスタート
@@ -29,7 +29,7 @@ await foreach (var chunk in llm.GenerateAsync("日本の首都は？"))
 }
 ```
 
-初回実行時にOllamaランタイムとGemma 4 E2Bモデルが自動でダウンロードされます。2回目以降はキャッシュから即座に起動します。
+初回の推論時にOllamaランタイムとGemma 4 E2Bモデルが自動でダウンロードされます。取得済みで要求する版と一致する場合はキャッシュを再利用します。
 
 ### チャットセッション
 
@@ -132,10 +132,12 @@ var llm = LlmChamberFactory.Create(o => o.DefaultModel = "llama3.2:1b");
 
 | バリアント | 説明 |
 |---|---|
-| `Auto` (デフォルト) | GPU/NPUを自動検出して最適なバイナリを選択 |
-| `Full` | CUDA対応フルバイナリ（Nvidia GPU向け） |
-| `Rocm` | AMD ROCm対応バイナリ |
-| `CpuOnly` | CPU-only（GPUなし環境向け） |
+| `Auto` (デフォルト) | Nvidia / Intel は `Full`、AMD は `Rocm`、未検出・その他は `CpuOnly` を選択 |
+| `Full` | 通常配布のバイナリ |
+| `Rocm` | Windows/Linux では通常版に AMD ROCm 用追加アセットを重ねて配置 |
+| `CpuOnly` | `Full` と同じ通常アセット。GPU を強制無効化する設定ではない |
+
+macOS はいずれの指定でも共通アセットを使用します。GPU が利用できるかは Ollama と実行環境に依存します。
 
 ## 設定オプション
 
@@ -144,13 +146,18 @@ var llm = LlmChamberFactory.Create(options =>
 {
     options.DefaultModel = "gemma4-e2b";       // デフォルトモデル
     options.RuntimeVariant = RuntimeVariant.Auto; // GPU自動検出
-    options.CacheDirectory = "~/.llmchamber";  // キャッシュ先
+    options.CacheDirectory = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".llmchamber");
     options.AutoDownloadRuntime = true;         // ランタイム自動DL
     options.AutoPullModel = true;              // モデル自動pull
     options.StartupTimeout = TimeSpan.FromSeconds(30);
     options.SharedModelDirectory = null;        // グローバルOllamaとモデル共有する場合に設定
 });
 ```
+
+既定キャッシュはユーザープロファイル配下の `.llmchamber` です。アプリごとに分離する場合は `CacheDirectory` に専用のパスを設定してください。文字列の `~` は展開されません。
+
+`OllamaVersion` を指定しなければライブラリ内蔵の既定版を使います。`AutoDownloadRuntime=false` は取得済みバイナリ・版・バリアントの一致を要求します。`AutoPullModel=false` は初期化時のモデル取得を抑止するため、必要なモデルを事前に用意するか、`llm.Runtime.EnsureModelAsync()` で明示的に取得してください。
 
 ## ダウンロード進捗
 
@@ -193,7 +200,7 @@ await foreach (var chunk in session.SendAsync(
 
 ## 🎤🔊 音声入出力 (Speech)
 
-`UseSpeech()` を呼ぶと whisper.cpp と Piper のバイナリ・モデルが自動DLされます。**呼ぶまでは何もダウンロードされません**:
+`UseSpeech()` はセッションを作成します。初回の文字起こしで whisper.cpp とモデル、初回の読み上げで Piper と音声モデルを取得します。同じ LLM インスタンスではセッションを再利用し、最初に渡した `SpeechOptions` が使われます:
 
 ```csharp
 await using var llm = LlmChamberFactory.Create();
@@ -222,18 +229,19 @@ speech.ResourceDownloadProgress += (_, p) =>
 ```
 
 サポートプラットフォーム:
-- **Whisper STT**: Windows AMD64 は自動DL対応。Linux/macOS は `SpeechOptions.WhisperBinaryPath` で whisper-cli への明示パス指定が必要
-- **Piper TTS**: Windows/Linux x64・arm64、macOS x64・arm64 全て自動DL対応
+
+- **Whisper STT**: Windows x64 は自動DL対応。それ以外は `SpeechOptions.WhisperBinaryPath` で whisper-cli への明示パス指定が必要
+- **Piper TTS**: Windows x64、Linux/macOS x64・arm64 は自動DL対応。それ以外は `SpeechOptions.PiperBinaryPath` で明示パス指定が必要
 
 ## 🎬 動画解析 (Media)
 
-`UseMedia()` で FFmpeg が自動DL されます。フレーム抽出 → Vision モデル解析を `IAsyncEnumerable` でストリーミング:
+`UseMedia()` はセッションを作成し、初回の解析またはフレーム抽出で FFmpeg を取得します。同じ LLM インスタンスではセッションを再利用し、最初に渡した `MediaOptions` が使われます。フレーム抽出後、Vision モデルの解析結果を `IAsyncEnumerable` で順番に返します:
 
 ```csharp
 await using var llm = LlmChamberFactory.Create(o => o.DefaultModel = "gemma3-4b");
 var media = llm.UseMedia();
 
-// 動画を1秒ごとに切り出して各フレームをVisionモデルで解析
+// 動画を2秒ごとに切り出して各フレームをVisionモデルで解析
 await foreach (var frame in media.AnalyzeAsync("video.mp4",
     prompt: "この動画はどんなシーンですか？",
     options: new VideoAnalysisOptions
@@ -254,6 +262,7 @@ await foreach (var frame in media.ExtractFramesAsync("video.mp4"))
 ```
 
 サポートプラットフォーム:
+
 - **FFmpeg**: Windows x64 / Linux x64・arm64 は BtbN/FFmpeg-Builds から自動DL
 - macOS は `brew install ffmpeg` 推奨、`MediaOptions.FFmpegBinaryPath` で明示パス指定
 
@@ -304,9 +313,10 @@ catch (OllamaApiException ex)
 ## 動作要件
 
 - .NET 8.0 以上
-- Windows / macOS / Linux
-- 初回のみインターネット接続が必要（Ollamaランタイム + モデルダウンロード）
-- 2回目以降は完全オフラインで動作
+- Windows / macOS / Linux（x64 / arm64）。機能ごとの自動取得範囲は Speech / Media の節を参照。MAUI パッケージはモバイル OS でのランタイム動作を保証しません
+- Linux での Ollama 自動取得には `.tar.zst` を展開できる `tar` が必要
+- 未取得のランタイム・モデル・音声リソースの取得にはインターネット接続が必要
+- 必要なリソースが揃い、要求するランタイム版とバリアントがキャッシュに一致する場合はオフラインで動作
 
 ## 既存Ollamaとの共存
 
@@ -318,5 +328,6 @@ LlmChamberは独自のポートとモデルディレクトリで動作するた�
 
 ## 参考リンク
 
+- [開発・検証手順](AGENTS.md) / [内部構造と設計](DESIGN.md)
 - [Ollama](https://ollama.com/) — ローカルLLMランタイム
 - [Ollama HTTP API](https://github.com/ollama/ollama/blob/main/docs/api.md)

@@ -12,18 +12,18 @@
 
 ## ビルドと検証
 
-.NET 10 SDK を使用する。ソリューションには Windows UI と MAUI サンプルが含まれるため、全体ビルドには Windows および対象 MAUI workload が必要。公開パッケージの TFM は DESIGN.md を参照する。
+.NET 10 SDK を使用する。ソリューションには Windows UI と MAUI サンプルが含まれるため、全体ビルドには Windows および対象 MAUI workload が必要。公開パッケージの TFM は DESIGN.md を参照する。`global.json` は Microsoft.Testing.Platform を選択しているが、現行テストプロジェクトはその実行連携を設定していないため、`OutputType=Exe` を指定し、xUnit v3 の実行ファイルを `dotnet run` で起動する。
 
 ```powershell
 # ソリューション全体
 dotnet build LlmChamber.slnx
 
 # ユニットテスト（両 TFM）
-dotnet test test/LlmChamber.Tests/LlmChamber.Tests.csproj --framework net8.0
-dotnet test test/LlmChamber.Tests/LlmChamber.Tests.csproj --framework net10.0
+dotnet run --project test/LlmChamber.Tests/LlmChamber.Tests.csproj --framework net8.0 -p:OutputType=Exe
+dotnet run --project test/LlmChamber.Tests/LlmChamber.Tests.csproj --framework net10.0 -p:OutputType=Exe
 
 # 対象を絞った確認
-dotnet test test/LlmChamber.Tests/LlmChamber.Tests.csproj --framework net10.0 --filter "FullyQualifiedName~OllamaModelsTests"
+dotnet run --project test/LlmChamber.Tests/LlmChamber.Tests.csproj --framework net10.0 -p:OutputType=Exe -- -class LlmChamber.Tests.OllamaModelsTests
 
 # パッケージ生成の確認が必要な場合
 dotnet pack LlmChamber.slnx -c Release -o artifacts

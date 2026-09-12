@@ -56,6 +56,7 @@ GPU 判定は Windows の PowerShell CIM、Linux の `lspci`、macOS の `sysctl
 - ダウンロード用と Ollama API 用の `HttpClient` は別インスタンス。送信後に変更できない `BaseAddress` の競合を避ける。DI のキーは `LlmChamberHttpClients.Downloader` / `.Api` で、事前登録されたクライアントを `TryAddKeyedSingleton` により維持する。Speech/Media は Downloader を再利用する。
 - Factory が生成した両 HttpClient は `LocalLlm` が所有し、破棄時に解放する。DI 経由のクライアントは `LocalLlm` で破棄しない。`LocalLlm` は作成した Speech/Media セッションと Ollama プロセスを停止・破棄する。
 - 標準 HttpClient の Timeout は無制限とし、キャンセルを伝播する。非ストリーミング推論は API クライアントのリンクされた CancellationTokenSource で最大30分に制限する。
+- `RuntimeManager.GetRuntimeVersionAsync()` は稼働中の API を優先し、停止中または API の通常エラー時はキャッシュの `.version` を読む（未取得なら null）。API の `OperationCanceledException` はフォールバックせず伝播し、キャンセルを成功扱いにしない。
 - 初期化とプロセス起動はそれぞれセマフォで制御する。初期化済みでもプロセスが停止していれば再起動する。起動失敗時や破棄時は管理対象プロセスの終了を試みる。
 - チャットの失敗・キャンセル・ストリーム列挙の途中終了ではユーザーメッセージをロールバックし、完走時だけ応答を履歴へ確定する。`ClearHistory` と履歴上限処理ではシステムメッセージを保持する。履歴操作の lock は送信全体を直列化するものではない。
 - `AutoDownloadRuntime=false` はキャッシュのバイナリ・版・バリアントを確認し、不一致なら例外とする。`AutoPullModel=false` は初期化時の自動取得を抑止するもので、明示的な `EnsureModelAsync` を禁止しない。
