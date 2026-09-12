@@ -13,7 +13,7 @@ namespace LlmChamber.Internal.Speech;
 /// </summary>
 internal sealed class WhisperBinaryDownloader
 {
-    internal const string DefaultWhisperVersion = "v1.7.4";
+    internal const string DefaultWhisperVersion = "v1.9.2";
     private const string WhisperReleaseUrlTemplate =
         "https://github.com/ggerganov/whisper.cpp/releases/download/{0}/{1}";
 

@@ -16,7 +16,7 @@ public class OllamaModelsTests
     [Theory]
     [InlineData("gemma4-e2b", "gemma4:e2b")]
     [InlineData("gemma4-e4b", "gemma4:e4b")]
-    [InlineData("qwen3.5-2b", "qwen3:2b")]
+    [InlineData("qwen3.5-2b", "qwen3.5:2b")]
     [InlineData("phi4-mini", "phi4-mini")]
     [InlineData("gemma3-4b", "gemma3:4b")]
     [InlineData("qwen2.5vl-3b", "qwen2.5vl:3b")]

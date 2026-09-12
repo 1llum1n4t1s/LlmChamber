@@ -112,7 +112,7 @@ LlmChamberのインスタンス生成時に以下を自動実行する:
 |---|---|---|---|---|---|
 | `gemma4-e2b` | `gemma4:e2b` | Gemma 4 | ~3GB | 5GB | 最軽量。CPU推論に最適。マルチモーダル |
 | `gemma4-e4b` | `gemma4:e4b` | Gemma 4 | ~5GB | 8GB | 中型エッジモデル。音声入力対応 |
-| `qwen3.5-2b` | `qwen3:2b` | Qwen 3.5 | ~2GB | 4GB | 日本語・多言語が特に優秀 |
+| `qwen3.5-2b` | `qwen3.5:2b` | Qwen 3.5 | ~2.7GB | 4GB | 日本語・多言語が特に優秀 |
 | `phi4-mini` | `phi:3.8b` | Phi-4 | ~3GB | 6GB | 数学・コーディングに強い |
 
 推論パラメータはモデルごとに公式推奨値をプリセットとして内蔵する。Gemma 4はTemperature=1.0, TopP=0.95, TopK=64。

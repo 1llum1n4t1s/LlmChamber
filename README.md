@@ -111,7 +111,7 @@ UIパッケージにはCoreが内蔵されているため、追加でCoreパッ�
 |---|---|---|---|---|
 | `gemma4-e2b` | Gemma 4 E2B | ~3 GB | 5 GB | 最軽量。CPU推論に最適 |
 | `gemma4-e4b` | Gemma 4 E4B | ~5 GB | 8 GB | 中型。バランス型 |
-| `qwen3.5-2b` | Qwen 3.5 2B | ~2 GB | 4 GB | 日本語・多言語が優秀 |
+| `qwen3.5-2b` | Qwen 3.5 2B | ~2.7 GB | 4 GB | 日本語・多言語が優秀 |
 | `phi4-mini` | Phi-4 Mini | ~3 GB | 6 GB | 数学・コーディングに強い |
 
 ### マルチモーダル Vision モデル（画像入力対応）

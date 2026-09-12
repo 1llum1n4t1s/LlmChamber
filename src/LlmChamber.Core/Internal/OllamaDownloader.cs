@@ -12,7 +12,7 @@ namespace LlmChamber.Internal;
 /// </summary>
 internal sealed class OllamaDownloader
 {
-    internal const string DefaultOllamaVersion = "0.20.2";
+    internal const string DefaultOllamaVersion = "0.34.0";
     private const string GithubReleaseUrlTemplate = "https://github.com/ollama/ollama/releases/download/v{0}/{1}";
     private const int DownloadBufferSize = 81920; // 80KB
 

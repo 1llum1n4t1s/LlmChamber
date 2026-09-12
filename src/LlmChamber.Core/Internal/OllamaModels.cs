@@ -40,10 +40,10 @@ internal static class OllamaModels
         new ModelPreset
         {
             Id = "qwen3.5-2b",
-            OllamaTag = "qwen3:2b",
+            OllamaTag = "qwen3.5:2b",
             DisplayName = "Qwen 3.5 2B",
             Family = "Qwen 3.5",
-            ApproximateDownloadSize = 2L * 1024 * 1024 * 1024, // ~2GB
+            ApproximateDownloadSize = 2_700_000_000L, // ~2.7GB
             RecommendedMinRam = 4L * 1024 * 1024 * 1024, // 4GB
             DefaultInferenceOptions = new InferenceOptions
             {
