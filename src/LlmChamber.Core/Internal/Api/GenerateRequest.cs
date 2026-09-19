@@ -23,8 +23,11 @@ internal sealed class GenerateRequest
     public IReadOnlyList<string>? Images { get; init; }
 }
 
-internal sealed class GenerateResponse
+internal sealed class GenerateResponse : IOllamaApiResponse
 {
+    [JsonPropertyName("error")]
+    public string? Error { get; init; }
+
     [JsonPropertyName("model")]
     public string Model { get; init; } = "";
 

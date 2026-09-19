@@ -11,8 +11,11 @@ internal sealed class PullRequest
     public bool Stream { get; init; } = true;
 }
 
-internal sealed class PullResponse
+internal sealed class PullResponse : IOllamaApiResponse
 {
+    [JsonPropertyName("error")]
+    public string? Error { get; init; }
+
     [JsonPropertyName("status")]
     public string Status { get; init; } = "";
 

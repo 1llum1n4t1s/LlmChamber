@@ -1,7 +1,6 @@
 using System.IO;
 using System.Runtime.CompilerServices;
 using LlmChamber.Media;
-using SuperLightLogger;
 
 namespace LlmChamber.Internal.Media;
 
@@ -16,7 +15,6 @@ internal sealed class VideoSession : IVideoSession
     /// </summary>
     public delegate Task<string> FrameAnalyzer(string prompt, byte[] imageBytes, CancellationToken cancellationToken);
 
-    private static readonly ILog _logger = LogManager.GetLogger<VideoSession>();
     private readonly MediaOptions _options;
     private readonly string _cacheDirectory;
     private readonly FFmpegBinaryDownloader _ffmpegBinaryDownloader;
@@ -96,13 +94,13 @@ internal sealed class VideoSession : IVideoSession
             var progress = new Progress<DownloadProgress>(p => ResourceDownloadProgress?.Invoke(this, p));
 
             string binaryPath = _options.FFmpegBinaryPath
-                ?? await _ffmpegBinaryDownloader.EnsureBinaryAsync(mediaDir, progress, cancellationToken);
+                ?? await _ffmpegBinaryDownloader.EnsureBinaryAsync(
+                    mediaDir, progress, cancellationToken, allowDownload: _options.AutoDownload);
 
             if (!File.Exists(binaryPath))
                 throw new FFmpegBinaryNotFoundException($"FFmpegバイナリが見つかりません: {binaryPath}");
 
             _extractor = new FFmpegFrameExtractor(binaryPath);
-            _logger.Info($"FFmpeg 初期化完了: {binaryPath}");
             return _extractor;
         }
         finally

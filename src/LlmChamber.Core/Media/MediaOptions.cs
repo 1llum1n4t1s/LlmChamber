@@ -9,6 +9,9 @@ public sealed class MediaOptions
     /// </summary>
     public string? FFmpegBinaryPath { get; set; }
 
-    /// <summary>FFmpeg/FFprobe の自動ダウンロードを有効にするかどうか。</summary>
+    /// <summary>
+    /// FFmpeg/FFprobe の自動ダウンロードを有効にするかどうか。
+    /// false の場合は明示パスまたは有効なキャッシュだけを使用する。
+    /// </summary>
     public bool AutoDownload { get; set; } = true;
 }

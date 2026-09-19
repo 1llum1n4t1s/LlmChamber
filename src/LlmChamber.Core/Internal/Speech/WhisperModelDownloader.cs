@@ -1,7 +1,6 @@
 using System.IO;
 using System.Net.Http;
 using LlmChamber.Speech;
-using SuperLightLogger;
 
 namespace LlmChamber.Internal.Speech;
 
@@ -13,7 +12,6 @@ internal sealed class WhisperModelDownloader
     private const string HuggingFaceUrlTemplate =
         "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{0}";
 
-    private static readonly ILog _logger = LogManager.GetLogger<WhisperModelDownloader>();
     private readonly HttpClient _httpClient;
 
     public WhisperModelDownloader(HttpClient httpClient)
@@ -28,7 +26,8 @@ internal sealed class WhisperModelDownloader
         string modelsDirectory,
         WhisperModelSize modelSize,
         IProgress<DownloadProgress>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool allowDownload = true)
     {
         string fileName = GetModelFileName(modelSize);
         Directory.CreateDirectory(modelsDirectory);
@@ -36,15 +35,21 @@ internal sealed class WhisperModelDownloader
 
         if (File.Exists(modelPath))
         {
-            _logger.Debug($"Whisperモデルが既に存在します: {modelPath}");
             return modelPath;
+        }
+
+        if (!allowDownload)
+        {
+            throw new SpeechModelNotFoundException(
+                modelSize.ToString(),
+                $"Whisperモデルがキャッシュに見つかりません: {modelPath}。" +
+                "SpeechOptions.AutoDownload を有効にするか、WhisperModelPath を指定してください。");
         }
 
         string url = string.Format(
             System.Globalization.CultureInfo.InvariantCulture,
             HuggingFaceUrlTemplate, fileName);
 
-        _logger.Info($"Whisperモデルをダウンロード中: {url}");
         progress?.Report(new DownloadProgress(0, null, null, $"モデルダウンロード開始: {fileName}"));
 
         // アトミック書き込み: .tmp に書いて成功時に rename
@@ -74,7 +79,6 @@ internal sealed class WhisperModelDownloader
             // アトミックリネーム（File.Delete→File.Move の TOCTOU を避ける）
             File.Move(tmpPath, modelPath, overwrite: true);
 
-            _logger.Info($"Whisperモデルのダウンロード完了: {modelPath}");
             return modelPath;
         }
         catch

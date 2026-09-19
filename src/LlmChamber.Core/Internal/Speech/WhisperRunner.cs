@@ -4,7 +4,6 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using LlmChamber.Speech;
-using SuperLightLogger;
 
 namespace LlmChamber.Internal.Speech;
 
@@ -14,7 +13,6 @@ namespace LlmChamber.Internal.Speech;
 /// </summary>
 internal sealed class WhisperRunner
 {
-    private static readonly ILog _logger = LogManager.GetLogger<WhisperRunner>();
     private readonly string _binaryPath;
     private readonly string _modelPath;
 

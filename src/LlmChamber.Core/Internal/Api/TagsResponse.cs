@@ -2,8 +2,11 @@ using System.Text.Json.Serialization;
 
 namespace LlmChamber.Internal.Api;
 
-internal sealed class TagsResponse
+internal sealed class TagsResponse : IOllamaApiResponse
 {
+    [JsonPropertyName("error")]
+    public string? Error { get; init; }
+
     [JsonPropertyName("models")]
     public IReadOnlyList<TagModel> Models { get; init; } = [];
 }

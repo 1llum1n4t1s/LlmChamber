@@ -19,8 +19,8 @@ public static class LlmChamberFactory
         var options = new LlmChamberOptions();
         configure?.Invoke(options);
 
-        // ダウンローダーとAPIクライアントで別のHttpClientを使用する
-        // （HttpClient.BaseAddressはリクエスト送信後に変更できないため）
+        // ダウンロードとAPIで独立した通信設定・所有権を維持するため、別のHttpClientを使用する。
+        // APIの接続先はOllamaApiClientが絶対URIへ解決し、HttpClient.BaseAddressは変更しない。
         // Timeout = InfiniteTimeSpan: 大きなバイナリ/モデルDLや長時間推論は CancellationToken で制御する
         var downloadHttpClient = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
         var apiHttpClient = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };

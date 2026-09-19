@@ -1,6 +1,5 @@
 using System.IO;
 using LlmChamber.Speech;
-using SuperLightLogger;
 // MAUI の Microsoft.Maui.Media.SpeechOptions と名前衝突するためエイリアスで解決
 using SpeechOptions = LlmChamber.Speech.SpeechOptions;
 
@@ -9,7 +8,6 @@ namespace LlmChamber.Internal.Speech;
 /// <summary>ISpeechSession の実装。Whisper/Piper の協調を担当する。</summary>
 internal sealed class SpeechSession : ISpeechSession
 {
-    private static readonly ILog _logger = LogManager.GetLogger<SpeechSession>();
     private readonly SpeechOptions _options;
     private readonly string _cacheDirectory;
     private readonly WhisperBinaryDownloader _whisperBinaryDownloader;
@@ -118,10 +116,12 @@ internal sealed class SpeechSession : ISpeechSession
             string modelsDir = Path.Combine(speechDir, "models");
 
             string binaryPath = _options.WhisperBinaryPath
-                ?? await _whisperBinaryDownloader.EnsureBinaryAsync(speechDir, progress, cancellationToken);
+                ?? await _whisperBinaryDownloader.EnsureBinaryAsync(
+                    speechDir, progress, cancellationToken, allowDownload: _options.AutoDownload);
 
             string modelPath = _options.WhisperModelPath
-                ?? await _whisperModelDownloader.EnsureModelAsync(modelsDir, _options.WhisperModel, progress, cancellationToken);
+                ?? await _whisperModelDownloader.EnsureModelAsync(
+                    modelsDir, _options.WhisperModel, progress, cancellationToken, allowDownload: _options.AutoDownload);
 
             if (!File.Exists(binaryPath))
                 throw new SpeechBinaryNotFoundException("whisper-cli", $"Whisperバイナリが見つかりません: {binaryPath}");
@@ -129,7 +129,6 @@ internal sealed class SpeechSession : ISpeechSession
                 throw new SpeechModelNotFoundException(_options.WhisperModel.ToString(), $"Whisperモデルが見つかりません: {modelPath}");
 
             _whisperRunner = new WhisperRunner(binaryPath, modelPath);
-            _logger.Info($"Whisper 初期化完了: {binaryPath}, model: {modelPath}");
             return _whisperRunner;
         }
         finally
@@ -152,19 +151,20 @@ internal sealed class SpeechSession : ISpeechSession
             if (_piperRunner is null)
             {
                 string binaryPath = _options.PiperBinaryPath
-                    ?? await _piperBinaryDownloader.EnsureBinaryAsync(speechDir, progress, cancellationToken);
+                    ?? await _piperBinaryDownloader.EnsureBinaryAsync(
+                        speechDir, progress, cancellationToken, allowDownload: _options.AutoDownload);
 
                 if (!File.Exists(binaryPath))
                     throw new SpeechBinaryNotFoundException("piper", $"Piperバイナリが見つかりません: {binaryPath}");
 
                 _piperRunner = new PiperRunner(binaryPath);
-                _logger.Info($"Piper 初期化完了: {binaryPath}");
             }
 
             string voiceName = requestedVoice ?? _options.DefaultVoice;
             if (!_voiceCache.TryGetValue(voiceName, out var voicePath))
             {
-                voicePath = await _piperVoiceDownloader.EnsureVoiceAsync(voicesDir, voiceName, progress, cancellationToken);
+                voicePath = await _piperVoiceDownloader.EnsureVoiceAsync(
+                    voicesDir, voiceName, progress, cancellationToken, allowDownload: _options.AutoDownload);
                 _voiceCache[voiceName] = voicePath;
             }
 

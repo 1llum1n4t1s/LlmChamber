@@ -18,8 +18,11 @@ internal sealed class ChatRequest
     public OllamaOptions? Options { get; init; }
 }
 
-internal sealed class ChatResponse
+internal sealed class ChatResponse : IOllamaApiResponse
 {
+    [JsonPropertyName("error")]
+    public string? Error { get; init; }
+
     [JsonPropertyName("model")]
     public string Model { get; init; } = "";
 

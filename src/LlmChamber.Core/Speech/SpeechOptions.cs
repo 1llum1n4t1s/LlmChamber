@@ -39,7 +39,8 @@ public sealed class SpeechOptions
     public string? PiperVoicesDirectory { get; set; }
 
     /// <summary>
-    /// バイナリ・モデルの自動ダウンロードを有効にするかどうか。
+    /// バイナリ・モデル・voice の自動ダウンロードを有効にするかどうか。
+    /// false の場合は明示パスまたは有効なキャッシュだけを使用する。
     /// </summary>
     public bool AutoDownload { get; set; } = true;
 }

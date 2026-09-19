@@ -30,8 +30,17 @@ internal partial class OllamaJsonContext : JsonSerializerContext
     public static OllamaJsonContext Instance => _default.Value;
 }
 
-internal sealed class VersionResponse
+internal sealed class VersionResponse : IOllamaApiResponse
 {
+    [JsonPropertyName("error")]
+    public string? Error { get; init; }
+
     [JsonPropertyName("version")]
     public string Version { get; init; } = "";
+}
+
+/// <summary>Ollama API応答に共通するエラー情報。</summary>
+internal interface IOllamaApiResponse
+{
+    string? Error { get; }
 }

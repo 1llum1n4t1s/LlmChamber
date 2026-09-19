@@ -21,8 +21,8 @@ public static class ServiceCollectionExtensions
         else
             services.Configure<LlmChamberOptions>(_ => { });
 
-        // ダウンローダーとAPIクライアントで別のHttpClientを使用する
-        // （HttpClient.BaseAddressはリクエスト送信後に変更できないため）
+        // ダウンロードとAPIで独立した通信設定・所有権を維持するため、別のHttpClientを使用する。
+        // APIの接続先はOllamaApiClientが絶対URIへ解決し、HttpClient.BaseAddressは変更しない。
         // TryAddで登録し、消費者が事前にカスタムHttpClientを登録していれば上書きしない
         // Timeout = InfiniteTimeSpan: 大きなバイナリ/モデルDLや長時間推論は CancellationToken で制御する
         services.TryAddKeyedSingleton<HttpClient>(LlmChamberHttpClients.Downloader,

@@ -74,4 +74,84 @@ public class MediaTests
         // 同じ参照のバイト列・同じフィールド → 等価
         Assert.Equal(a, b);
     }
+
+    [Fact]
+    public async Task VideoSession_AutoDownloadDisabled_MissingFFmpeg_DoesNotSendHttp()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string directory = CreateTempDirectory();
+        var handler = new CountingHandler();
+        using var httpClient = new HttpClient(handler);
+        await using var session = new VideoSession(
+            new MediaOptions { AutoDownload = false },
+            directory,
+            new FFmpegBinaryDownloader(httpClient),
+            (_, _, _) => Task.FromResult(string.Empty));
+
+        try
+        {
+            await Assert.ThrowsAsync<FFmpegBinaryNotFoundException>(async () =>
+            {
+                await using var enumerator = session.ExtractFramesAsync(
+                    Path.Combine(directory, "video.mp4"), cancellationToken: cancellationToken).GetAsyncEnumerator(cancellationToken);
+                await enumerator.MoveNextAsync();
+            });
+            Assert.Equal(0, handler.SendCount);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task FFmpegDownloader_AutoDownloadDisabled_ValidCacheReturnsWithoutHttp()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string directory = CreateTempDirectory();
+        var handler = new CountingHandler();
+        using var httpClient = new HttpClient(handler);
+
+        try
+        {
+            string ffmpegDirectory = Path.Combine(directory, "ffmpeg");
+            Directory.CreateDirectory(ffmpegDirectory);
+            string binaryPath = Path.Combine(
+                ffmpegDirectory,
+                FFmpegBinaryDownloader.GetExecutableName(PlatformInfo.GetCurrentOs()));
+            await File.WriteAllBytesAsync(binaryPath, [], cancellationToken);
+            await File.WriteAllTextAsync(
+                Path.Combine(ffmpegDirectory, ".version"), FFmpegBinaryDownloader.MarkerValue, cancellationToken);
+
+            string result = await new FFmpegBinaryDownloader(httpClient).EnsureBinaryAsync(
+                directory, cancellationToken: cancellationToken, allowDownload: false);
+
+            Assert.Equal(binaryPath, result);
+            Assert.Equal(0, handler.SendCount);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private static string CreateTempDirectory()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"llmchamber-media-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+    private sealed class CountingHandler : HttpMessageHandler
+    {
+        public int SendCount { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            SendCount++;
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK));
+        }
+    }
 }

@@ -81,6 +81,7 @@ public class SpeechTests
     [InlineData("en_US-amy-medium", "en_US", "medium")]
     [InlineData("ja_JP-takumi-medium", "ja_JP", "medium")]
     [InlineData("de_DE-thorsten-low", "de_DE", "low")]
+    [InlineData("en_GB-northern-english-male-medium", "en_GB", "medium")]
     public void PiperVoiceDownloader_ParseVoiceName_Succeeds(string voiceName, string expectedLang, string expectedQuality)
     {
         var (lang, quality) = PiperVoiceDownloader.ParseVoiceName(voiceName);
@@ -91,6 +92,11 @@ public class SpeechTests
     [Theory]
     [InlineData("invalid")]
     [InlineData("notenough-dashes")]
+    [InlineData("../en_US-amy-medium")]
+    [InlineData("en_US/amy-medium")]
+    [InlineData("en_US\\amy-medium")]
+    [InlineData("en_US-..-medium")]
+    [InlineData("en_US--medium")]
     public void PiperVoiceDownloader_ParseVoiceName_InvalidFormat_Throws(string voiceName)
     {
         Assert.Throws<ArgumentException>(() => PiperVoiceDownloader.ParseVoiceName(voiceName));
@@ -99,11 +105,154 @@ public class SpeechTests
     [Theory]
     [InlineData("en_US-amy-medium", "en/en_US/amy/medium")]
     [InlineData("ja_JP-takumi-medium", "ja/ja_JP/takumi/medium")]
+    [InlineData("en_GB-northern-english-male-medium", "en/en_GB/northern-english-male/medium")]
     public void PiperVoiceDownloader_BuildHuggingFaceVoicePath_Format(string voiceName, string expected)
     {
         var (lang, quality) = PiperVoiceDownloader.ParseVoiceName(voiceName);
         string result = PiperVoiceDownloader.BuildHuggingFaceVoicePath(voiceName, lang, quality);
         Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public async Task SpeechSession_AutoDownloadDisabled_MissingWhisperBinary_DoesNotSendHttp()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string directory = CreateTempDirectory();
+        var handler = new CountingHandler();
+        using var httpClient = new HttpClient(handler);
+        await using var session = CreateSession(new SpeechOptions { AutoDownload = false }, directory, httpClient);
+
+        try
+        {
+            await Assert.ThrowsAsync<SpeechBinaryNotFoundException>(
+                () => session.TranscribeFileAsync(Path.Combine(directory, "input.wav"), cancellationToken: cancellationToken));
+            Assert.Equal(0, handler.SendCount);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task SpeechSession_AutoDownloadDisabled_MissingWhisperModel_DoesNotSendHttp()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string directory = CreateTempDirectory();
+        string binaryPath = Path.Combine(directory, "whisper-cli");
+        await File.WriteAllBytesAsync(binaryPath, [], cancellationToken);
+        var handler = new CountingHandler();
+        using var httpClient = new HttpClient(handler);
+        await using var session = CreateSession(
+            new SpeechOptions { AutoDownload = false, WhisperBinaryPath = binaryPath }, directory, httpClient);
+
+        try
+        {
+            await Assert.ThrowsAsync<SpeechModelNotFoundException>(
+                () => session.TranscribeFileAsync(Path.Combine(directory, "input.wav"), cancellationToken: cancellationToken));
+            Assert.Equal(0, handler.SendCount);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task SpeechSession_AutoDownloadDisabled_MissingPiperBinary_DoesNotSendHttp()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string directory = CreateTempDirectory();
+        var handler = new CountingHandler();
+        using var httpClient = new HttpClient(handler);
+        await using var session = CreateSession(new SpeechOptions { AutoDownload = false }, directory, httpClient);
+
+        try
+        {
+            await Assert.ThrowsAsync<SpeechBinaryNotFoundException>(
+                () => session.SpeakAsync("hello", cancellationToken: cancellationToken));
+            Assert.Equal(0, handler.SendCount);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task SpeechSession_AutoDownloadDisabled_MissingPiperVoice_DoesNotSendHttp()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string directory = CreateTempDirectory();
+        string binaryPath = Path.Combine(directory, "piper");
+        await File.WriteAllBytesAsync(binaryPath, [], cancellationToken);
+        var handler = new CountingHandler();
+        using var httpClient = new HttpClient(handler);
+        await using var session = CreateSession(
+            new SpeechOptions { AutoDownload = false, PiperBinaryPath = binaryPath }, directory, httpClient);
+
+        try
+        {
+            await Assert.ThrowsAsync<SpeechModelNotFoundException>(
+                () => session.SpeakAsync("hello", cancellationToken: cancellationToken));
+            Assert.Equal(0, handler.SendCount);
+            Assert.False(Directory.Exists(Path.Combine(directory, "speech", "voices")));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Downloaders_AutoDownloadDisabled_ValidCachesReturnWithoutHttp()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string directory = CreateTempDirectory();
+        var handler = new CountingHandler();
+        using var httpClient = new HttpClient(handler);
+
+        try
+        {
+            var os = PlatformInfo.GetCurrentOs();
+            string speechDirectory = Path.Combine(directory, "speech");
+            string whisperDirectory = Path.Combine(speechDirectory, "whisper");
+            string piperDirectory = Path.Combine(speechDirectory, "piper");
+            string modelsDirectory = Path.Combine(speechDirectory, "models");
+            string voicesDirectory = Path.Combine(speechDirectory, "voices");
+            Directory.CreateDirectory(whisperDirectory);
+            Directory.CreateDirectory(piperDirectory);
+            Directory.CreateDirectory(modelsDirectory);
+            Directory.CreateDirectory(voicesDirectory);
+
+            string whisperPath = Path.Combine(whisperDirectory, WhisperBinaryDownloader.GetExecutableName(os));
+            string piperPath = Path.Combine(piperDirectory, PiperBinaryDownloader.GetExecutableName(os));
+            string modelPath = Path.Combine(modelsDirectory, WhisperModelDownloader.GetModelFileName(WhisperModelSize.Base));
+            string voicePath = Path.Combine(voicesDirectory, "en_US-amy-medium.onnx");
+            await File.WriteAllBytesAsync(whisperPath, [], cancellationToken);
+            await File.WriteAllTextAsync(
+                Path.Combine(whisperDirectory, ".version"), WhisperBinaryDownloader.DefaultWhisperVersion, cancellationToken);
+            await File.WriteAllBytesAsync(piperPath, [], cancellationToken);
+            await File.WriteAllTextAsync(
+                Path.Combine(piperDirectory, ".version"), PiperBinaryDownloader.DefaultPiperVersion, cancellationToken);
+            await File.WriteAllBytesAsync(modelPath, [], cancellationToken);
+            await File.WriteAllBytesAsync(voicePath, [], cancellationToken);
+            await File.WriteAllBytesAsync(voicePath + ".json", [], cancellationToken);
+
+            Assert.Equal(whisperPath, await new WhisperBinaryDownloader(httpClient).EnsureBinaryAsync(
+                speechDirectory, cancellationToken: cancellationToken, allowDownload: false));
+            Assert.Equal(piperPath, await new PiperBinaryDownloader(httpClient).EnsureBinaryAsync(
+                speechDirectory, cancellationToken: cancellationToken, allowDownload: false));
+            Assert.Equal(modelPath, await new WhisperModelDownloader(httpClient).EnsureModelAsync(
+                modelsDirectory, WhisperModelSize.Base, cancellationToken: cancellationToken, allowDownload: false));
+            Assert.Equal(voicePath, await new PiperVoiceDownloader(httpClient).EnsureVoiceAsync(
+                voicesDirectory, "en_US-amy-medium", cancellationToken: cancellationToken, allowDownload: false));
+            Assert.Equal(0, handler.SendCount);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
     }
 
     // ── Whisper JSON Parser ──
@@ -164,5 +313,34 @@ public class SpeechTests
     {
         Assert.Equal(TimeSpan.Zero, WhisperRunner.ParseTimestamp(null));
         Assert.Equal(TimeSpan.Zero, WhisperRunner.ParseTimestamp(""));
+    }
+
+    private static SpeechSession CreateSession(SpeechOptions options, string cacheDirectory, HttpClient httpClient)
+        => new(
+            options,
+            cacheDirectory,
+            new WhisperBinaryDownloader(httpClient),
+            new WhisperModelDownloader(httpClient),
+            new PiperBinaryDownloader(httpClient),
+            new PiperVoiceDownloader(httpClient));
+
+    private static string CreateTempDirectory()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"llmchamber-speech-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+    private sealed class CountingHandler : HttpMessageHandler
+    {
+        public int SendCount { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            SendCount++;
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK));
+        }
     }
 }

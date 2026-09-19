@@ -1,6 +1,5 @@
 using System.IO;
 using Microsoft.Extensions.Options;
-using SuperLightLogger;
 
 namespace LlmChamber.Internal;
 
@@ -11,7 +10,6 @@ internal sealed class RuntimeManager : IRuntimeManager
     private readonly OllamaApiClient _apiClient;
     private readonly OllamaProcessManager _processManager;
     private readonly LlmChamberOptions _options;
-    private static readonly ILog _logger = LogManager.GetLogger<RuntimeManager>();
 
     public RuntimeManager(
         OllamaDownloader downloader,
@@ -89,11 +87,8 @@ internal sealed class RuntimeManager : IRuntimeManager
         var tags = await _apiClient.ListModelsAsync(cancellationToken);
         if (tags.Models.Any(m => IsModelMatch(m.Name, resolvedTag)))
         {
-            _logger.Debug($"モデル '{resolvedTag}' は既にpull済みです。");
             return;
         }
-
-        _logger.Info($"モデル '{resolvedTag}' をpull中...");
 
         await foreach (var chunk in _apiClient.PullModelAsync(resolvedTag, cancellationToken))
         {
@@ -108,7 +103,6 @@ internal sealed class RuntimeManager : IRuntimeManager
             }
         }
 
-        _logger.Info($"モデル '{resolvedTag}' のpull完了。");
     }
 
     public async Task<IReadOnlyList<ModelInfo>> ListModelsAsync(CancellationToken cancellationToken = default)
@@ -129,7 +123,6 @@ internal sealed class RuntimeManager : IRuntimeManager
         await EnsureProcessRunningAsync(cancellationToken);
         string resolvedTag = OllamaModels.ResolveModelTag(modelTag);
         await _apiClient.DeleteModelAsync(resolvedTag, cancellationToken);
-        _logger.Info($"モデル '{resolvedTag}' を削除しました。");
     }
 
     public async Task<long> GetCacheSizeBytesAsync(CancellationToken cancellationToken = default)

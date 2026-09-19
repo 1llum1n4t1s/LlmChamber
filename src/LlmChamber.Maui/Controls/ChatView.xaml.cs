@@ -40,6 +40,7 @@ public partial class ChatView : ContentView
 
     private IChatSession? _chatSession;
     private CancellationTokenSource? _currentCts;
+    private bool _isSending;
 
     /// <summary>LLMインスタンス。設定時にChatSessionが自動作成される。</summary>
     public ILocalLlm? LlmInstance
@@ -97,6 +98,8 @@ public partial class ChatView : ContentView
 
     private async Task SendMessageAsync()
     {
+        if (_isSending) return;
+
         var message = InputEntry.Text?.Trim();
         if (string.IsNullOrEmpty(message)) return;
 
@@ -115,6 +118,7 @@ public partial class ChatView : ContentView
         }
 
         // 入力を無効化
+        _isSending = true;
         IsInputEnabled = false;
         InputEntry.Text = string.Empty;
 
@@ -205,6 +209,7 @@ public partial class ChatView : ContentView
         {
             _currentCts?.Dispose();
             _currentCts = null;
+            _isSending = false;
             IsInputEnabled = true;
 
             await MainThread.InvokeOnMainThreadAsync(() =>

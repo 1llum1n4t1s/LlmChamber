@@ -5,7 +5,6 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using LlmChamber.Internal.Api;
-using SuperLightLogger;
 
 namespace LlmChamber.Internal;
 
@@ -16,28 +15,32 @@ namespace LlmChamber.Internal;
 internal sealed class OllamaApiClient
 {
     private readonly HttpClient _httpClient;
-    private static readonly ILog _logger = LogManager.GetLogger<OllamaApiClient>();
+    private Uri? _baseUri;
 
     public OllamaApiClient(HttpClient httpClient)
     {
         _httpClient = httpClient;
+        _baseUri = httpClient.BaseAddress;
     }
 
     /// <summary>APIのベースアドレスを設定する。</summary>
     public void SetBaseUrl(string baseUrl)
     {
-        _httpClient.BaseAddress = new Uri(baseUrl);
-        // 推論リクエストは長時間かかるため、HttpClient自体のTimeoutは無制限にし、
-        // 各リクエストでCancellationTokenにより個別に制御する
-        _httpClient.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out Uri? baseUri) ||
+            (baseUri.Scheme != Uri.UriSchemeHttp && baseUri.Scheme != Uri.UriSchemeHttps))
+        {
+            throw new ArgumentException("Ollama APIのベースURLには絶対HTTP(S) URLを指定してください。", nameof(baseUrl));
+        }
+
+        Volatile.Write(ref _baseUri, baseUri);
     }
 
     /// <summary>Ollamaのバージョンを取得する。</summary>
     public async Task<string> GetVersionAsync(CancellationToken cancellationToken = default)
     {
-        var response = await _httpClient.GetFromJsonAsync("/api/version",
+        var response = await GetJsonAsync("/api/version",
             OllamaJsonContext.Instance.VersionResponse, cancellationToken);
-        return response?.Version ?? "unknown";
+        return response.Version;
     }
 
     /// <summary>テキスト生成（ストリーミング）。</summary>
@@ -151,21 +154,29 @@ internal sealed class OllamaApiClient
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var request = new PullRequest { Name = modelTag, Stream = true };
+        bool completed = false;
 
         await foreach (var chunk in PostStreamAsync<PullRequest, PullResponse>(
             "/api/pull", request, OllamaJsonContext.Instance.PullRequest,
             OllamaJsonContext.Instance.PullResponse, cancellationToken))
         {
+            completed |= string.Equals(chunk.Status, "success", StringComparison.OrdinalIgnoreCase);
             yield return chunk;
+        }
+
+        if (!completed)
+        {
+            throw new OllamaApiException(
+                "Ollama APIのモデル取得ストリームが正常完了通知の前に終了しました。",
+                statusCode: 200);
         }
     }
 
     /// <summary>ローカルモデル一覧を取得する。</summary>
     public async Task<TagsResponse> ListModelsAsync(CancellationToken cancellationToken = default)
     {
-        var response = await _httpClient.GetFromJsonAsync("/api/tags",
+        return await GetJsonAsync("/api/tags",
             OllamaJsonContext.Instance.TagsResponse, cancellationToken);
-        return response ?? new TagsResponse();
     }
 
     /// <summary>Embeddingを取得する。</summary>
@@ -190,25 +201,28 @@ internal sealed class OllamaApiClient
     public async Task DeleteModelAsync(string modelTag, CancellationToken cancellationToken = default)
     {
         var deleteRequest = new DeleteRequest { Name = modelTag };
-        var request = new HttpRequestMessage(HttpMethod.Delete, "/api/delete")
+        using var request = new HttpRequestMessage(HttpMethod.Delete, CreateRequestUri("/api/delete"))
         {
             Content = JsonContent.Create(deleteRequest, OllamaJsonContext.Instance.DeleteRequest),
         };
-        var response = await _httpClient.SendAsync(request, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        await ThrowIfHttpErrorAsync(response, cancellationToken);
     }
 
     private async IAsyncEnumerable<TResponse> PostStreamAsync<TRequest, TResponse>(
         string endpoint, TRequest request,
         JsonTypeInfo<TRequest> requestTypeInfo, JsonTypeInfo<TResponse> responseTypeInfo,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        where TResponse : IOllamaApiResponse
     {
-        var content = JsonContent.Create(request, requestTypeInfo);
-        var httpRequest = new HttpRequestMessage(HttpMethod.Post, endpoint) { Content = content };
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, CreateRequestUri(endpoint))
+        {
+            Content = JsonContent.Create(request, requestTypeInfo),
+        };
         using var httpResponse = await _httpClient.SendAsync(httpRequest,
             HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
-        httpResponse.EnsureSuccessStatusCode();
+        await ThrowIfHttpErrorAsync(httpResponse, cancellationToken);
 
         await using var stream = await httpResponse.Content.ReadAsStreamAsync(cancellationToken);
         using var reader = new StreamReader(stream);
@@ -218,6 +232,7 @@ internal sealed class OllamaApiClient
             TResponse? item = JsonSerializer.Deserialize(line, responseTypeInfo);
             if (item is not null)
             {
+                ThrowIfApiError(item, (int)httpResponse.StatusCode, line);
                 yield return item;
             }
         }
@@ -227,23 +242,82 @@ internal sealed class OllamaApiClient
         string endpoint, TRequest request,
         JsonTypeInfo<TRequest> requestTypeInfo, JsonTypeInfo<TResponse> responseTypeInfo,
         CancellationToken cancellationToken = default)
+        where TResponse : IOllamaApiResponse
     {
-        // 非ストリーミングは長時間かかるため、HttpClient.Timeoutを無視してCancellationTokenのみで制御
-        var content = JsonContent.Create(request, requestTypeInfo);
-        var httpRequest = new HttpRequestMessage(HttpMethod.Post, endpoint) { Content = content };
+        // 標準クライアントのTimeoutは無制限。ここでは非ストリーミング要求に30分の上限を追加する。
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, CreateRequestUri(endpoint))
+        {
+            Content = JsonContent.Create(request, requestTypeInfo),
+        };
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(TimeSpan.FromMinutes(30)); // 非ストリーミングは最大30分
-        var httpResponse = await _httpClient.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+        using var httpResponse = await _httpClient.SendAsync(
+            httpRequest, HttpCompletionOption.ResponseHeadersRead, cts.Token);
 
-        if (!httpResponse.IsSuccessStatusCode)
+        await ThrowIfHttpErrorAsync(httpResponse, cts.Token);
+
+        string body = await httpResponse.Content.ReadAsStringAsync(cts.Token);
+        TResponse? response = JsonSerializer.Deserialize(body, responseTypeInfo);
+        if (response is null)
+            throw new OllamaApiException("Ollama APIからの応答が空です。", (int)httpResponse.StatusCode, body);
+
+        ThrowIfApiError(response, (int)httpResponse.StatusCode, body);
+        return response;
+    }
+
+    private async Task<TResponse> GetJsonAsync<TResponse>(
+        string endpoint,
+        JsonTypeInfo<TResponse> responseTypeInfo,
+        CancellationToken cancellationToken)
+        where TResponse : IOllamaApiResponse
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, CreateRequestUri(endpoint));
+        using var response = await _httpClient.SendAsync(
+            request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+
+        await ThrowIfHttpErrorAsync(response, cancellationToken);
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        TResponse? value = JsonSerializer.Deserialize(body, responseTypeInfo);
+        if (value is null)
+            throw new OllamaApiException("Ollama APIからの応答が空です。", (int)response.StatusCode, body);
+
+        ThrowIfApiError(value, (int)response.StatusCode, body);
+        return value;
+    }
+
+    private Uri CreateRequestUri(string endpoint)
+    {
+        Uri baseUri = Volatile.Read(ref _baseUri)
+            ?? throw new InvalidOperationException("Ollama APIのベースURLが設定されていません。");
+        return new Uri(baseUri, endpoint);
+    }
+
+    private static async Task ThrowIfHttpErrorAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        if (response.IsSuccessStatusCode)
+            return;
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        throw new OllamaApiException(
+            $"Ollama API エラー: {response.StatusCode}",
+            (int)response.StatusCode,
+            body);
+    }
+
+    private static void ThrowIfApiError(
+        IOllamaApiResponse response,
+        int statusCode,
+        string responseBody)
+    {
+        if (!string.IsNullOrWhiteSpace(response.Error))
         {
-            string body = await httpResponse.Content.ReadAsStringAsync(cancellationToken);
             throw new OllamaApiException(
-                $"Ollama API エラー: {httpResponse.StatusCode}",
-                (int)httpResponse.StatusCode, body);
+                $"Ollama API エラー: {response.Error}",
+                statusCode,
+                responseBody);
         }
-
-        var response = await httpResponse.Content.ReadFromJsonAsync(responseTypeInfo, cancellationToken);
-        return response ?? throw new OllamaApiException("Ollama APIからの応答が空です。");
     }
 }

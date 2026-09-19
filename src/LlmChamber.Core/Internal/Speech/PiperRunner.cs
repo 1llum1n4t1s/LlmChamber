@@ -3,7 +3,6 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using LlmChamber.Speech;
-using SuperLightLogger;
 
 namespace LlmChamber.Internal.Speech;
 
@@ -12,7 +11,6 @@ namespace LlmChamber.Internal.Speech;
 /// </summary>
 internal sealed class PiperRunner
 {
-    private static readonly ILog _logger = LogManager.GetLogger<PiperRunner>();
     private readonly string _binaryPath;
 
     public PiperRunner(string binaryPath)

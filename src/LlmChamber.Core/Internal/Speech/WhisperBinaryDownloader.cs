@@ -2,7 +2,6 @@ using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
 using LlmChamber.Speech;
-using SuperLightLogger;
 
 namespace LlmChamber.Internal.Speech;
 
@@ -17,7 +16,6 @@ internal sealed class WhisperBinaryDownloader
     private const string WhisperReleaseUrlTemplate =
         "https://github.com/ggerganov/whisper.cpp/releases/download/{0}/{1}";
 
-    private static readonly ILog _logger = LogManager.GetLogger<WhisperBinaryDownloader>();
     private readonly HttpClient _httpClient;
 
     public WhisperBinaryDownloader(HttpClient httpClient)
@@ -31,7 +29,8 @@ internal sealed class WhisperBinaryDownloader
     public async Task<string> EnsureBinaryAsync(
         string targetDirectory,
         IProgress<DownloadProgress>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool allowDownload = true)
     {
         var os = PlatformInfo.GetCurrentOs();
         var arch = PlatformInfo.GetCurrentArchitecture();
@@ -47,9 +46,16 @@ internal sealed class WhisperBinaryDownloader
             string installedVersion = (await File.ReadAllTextAsync(versionMarkerPath, cancellationToken)).Trim();
             if (installedVersion == DefaultWhisperVersion)
             {
-                _logger.Debug($"Whisperバイナリが既に存在します: {binaryPath} ({DefaultWhisperVersion})");
                 return binaryPath;
             }
+        }
+
+        if (!allowDownload)
+        {
+            throw new SpeechBinaryNotFoundException(
+                binaryName,
+                $"Whisperバイナリがキャッシュに見つからないか、バージョンが一致しません: {binaryPath}。" +
+                "SpeechOptions.AutoDownload を有効にするか、WhisperBinaryPath を指定してください。");
         }
 
         string? archiveName = GetReleaseAssetName(os, arch);
@@ -68,7 +74,6 @@ internal sealed class WhisperBinaryDownloader
             System.Globalization.CultureInfo.InvariantCulture,
             WhisperReleaseUrlTemplate, DefaultWhisperVersion, archiveName);
 
-        _logger.Info($"Whisperバイナリをダウンロード中: {downloadUrl}");
         progress?.Report(new DownloadProgress(0, null, null, $"ダウンロード開始: {archiveName}"));
 
         string uniqueId = Guid.NewGuid().ToString("N")[..8];
@@ -87,7 +92,6 @@ internal sealed class WhisperBinaryDownloader
             MergeExtractedContent(extractDir, whisperDir, binaryName, os);
 
             await File.WriteAllTextAsync(versionMarkerPath, DefaultWhisperVersion, cancellationToken);
-            _logger.Info($"Whisperバイナリのインストール完了: {binaryPath}");
             return binaryPath;
         }
         finally
@@ -121,14 +125,13 @@ internal sealed class WhisperBinaryDownloader
         // 展開後のディレクトリ構造は zip により異なるため、全ファイルをコピー
         // 例: whisper-bin-x64.zip → Release/{whisper-cli.exe, ggml-*.dll, whisper.dll, ...}
         // 同名ファイル衝突（サブディレクトリの重複）は最初に見つかったものを採用し、
-        // それ以降は警告ログを出してスキップする（後勝ちで誤った DLL が上書きされるのを防ぐ）
+        // それ以降はスキップする（後勝ちで誤った DLL が上書きされるのを防ぐ）
         var seenFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (string file in Directory.EnumerateFiles(extractDir, "*", SearchOption.AllDirectories))
         {
             string fileName = Path.GetFileName(file);
             if (!seenFiles.Add(fileName))
             {
-                _logger.Warn($"Whisper 展開時に同名ファイル '{fileName}' を検出。最初に見つかったものを採用します: {file}");
                 continue;
             }
             string targetPath = Path.Combine(whisperDir, fileName);

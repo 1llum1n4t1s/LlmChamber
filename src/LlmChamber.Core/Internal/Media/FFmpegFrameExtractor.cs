@@ -4,7 +4,6 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
 using LlmChamber.Media;
-using SuperLightLogger;
 
 namespace LlmChamber.Internal.Media;
 
@@ -13,7 +12,6 @@ namespace LlmChamber.Internal.Media;
 /// </summary>
 internal sealed class FFmpegFrameExtractor
 {
-    private static readonly ILog _logger = LogManager.GetLogger<FFmpegFrameExtractor>();
     private readonly string _ffmpegBinaryPath;
 
     public FFmpegFrameExtractor(string ffmpegBinaryPath)

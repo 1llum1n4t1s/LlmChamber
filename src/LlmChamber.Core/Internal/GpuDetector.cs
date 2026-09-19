@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using SuperLightLogger;
 
 namespace LlmChamber.Internal;
 
@@ -12,91 +11,83 @@ internal sealed record GpuInfo(string Vendor, string Name, long? VramBytes, bool
 /// </summary>
 internal static class GpuDetector
 {
-    private static readonly ILog _logger = LogManager.GetLogger(typeof(GpuDetector));
-
     /// <summary>推奨RuntimeVariantを検出する。</summary>
     public static RuntimeVariant DetectRecommendedVariant()
+        => DetectRecommendedVariant(PlatformInfo.GetCurrentOs(), RunCommand);
+
+    internal static RuntimeVariant DetectRecommendedVariant(
+        OsPlatform os,
+        Func<string, string, string> commandRunner)
     {
-        try
+        // RuntimeVariantの選択にNPU情報は使わないため、高コストなNPU列挙は行わない。
+        var gpu = DetectGpu(os, includeNpu: false, commandRunner);
+        if (gpu is null)
         {
-            var gpu = DetectGpu();
-            if (gpu is null)
-            {
-                _logger.Info("GPUが検出されませんでした。CPU-onlyモードを使用します。");
-                return RuntimeVariant.CpuOnly;
-            }
-
-            _logger.Info($"GPU検出: {gpu.Vendor} {gpu.Name}");
-
-            return gpu.Vendor.ToUpperInvariant() switch
-            {
-                "NVIDIA" or "NVIDIA CORPORATION" => RuntimeVariant.Full,
-                "AMD" or "ADVANCED MICRO DEVICES" or "ADVANCED MICRO DEVICES, INC." => RuntimeVariant.Rocm,
-                // Intel GPUはCUDA/ROCmに対応しないため、Ollamaではフル版(CUDA)でもCPUフォールバック可能
-                "INTEL" or "INTEL CORPORATION" => RuntimeVariant.Full,
-                _ => RuntimeVariant.CpuOnly,
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.Warn($"GPU検出に失敗しました。CPU-onlyモードを使用します。: {ex.Message}");
             return RuntimeVariant.CpuOnly;
         }
+
+        return gpu.Vendor.ToUpperInvariant() switch
+        {
+            "NVIDIA" or "NVIDIA CORPORATION" => RuntimeVariant.Full,
+            "AMD" or "ADVANCED MICRO DEVICES" or "ADVANCED MICRO DEVICES, INC." => RuntimeVariant.Rocm,
+            // Intel GPUはCUDA/ROCmに対応しないため、Ollamaではフル版(CUDA)でもCPUフォールバック可能
+            "INTEL" or "INTEL CORPORATION" => RuntimeVariant.Full,
+            _ => RuntimeVariant.CpuOnly,
+        };
     }
 
     /// <summary>GPUハードウェア情報を検出する。</summary>
     public static GpuInfo? DetectGpu()
+        => DetectGpu(PlatformInfo.GetCurrentOs(), includeNpu: true, RunCommand);
+
+    internal static GpuInfo? DetectGpu(
+        OsPlatform os,
+        bool includeNpu,
+        Func<string, string, string> commandRunner)
     {
-        var os = PlatformInfo.GetCurrentOs();
         return os switch
         {
-            OsPlatform.Windows => DetectGpuWindows(),
-            OsPlatform.Linux => DetectGpuLinux(),
-            OsPlatform.MacOS => DetectGpuMacOs(),
+            OsPlatform.Windows => DetectGpuWindows(includeNpu, commandRunner),
+            OsPlatform.Linux => DetectGpuLinux(commandRunner),
+            OsPlatform.MacOS => DetectGpuMacOs(commandRunner),
             _ => null,
         };
     }
 
-    private static GpuInfo? DetectGpuWindows()
+    private static GpuInfo? DetectGpuWindows(
+        bool includeNpu,
+        Func<string, string, string> commandRunner)
     {
         // PowerShell CIM (Get-CimInstance) を使用。wmic.exeはWin11で廃止済み。
-        try
+        string output = commandRunner("powershell", "-NoProfile -Command \"Get-CimInstance Win32_VideoController | Select-Object AdapterCompatibility,AdapterRAM,Name | ConvertTo-Csv -NoTypeInformation\"");
+        var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        // 詳細情報を求める経路でのみ、全PnPデバイスを1回列挙する。
+        bool hasNpu = includeNpu && DetectNpu(commandRunner);
+        GpuInfo? firstGpu = null;
+
+        foreach (string line in lines.Skip(1)) // CSVヘッダーをスキップ
         {
-            string output = RunCommand("powershell", "-NoProfile -Command \"Get-CimInstance Win32_VideoController | Select-Object AdapterCompatibility,AdapterRAM,Name | ConvertTo-Csv -NoTypeInformation\"");
-            var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            // CSVパース（引用符あり）
+            string[] parts = ParseCsvLine(line);
+            if (parts.Length < 3) continue;
 
-            // NPU検出は高コスト（全PnPデバイス列挙）のため1回だけ実行
-            bool hasNpu = DetectNpu();
-            GpuInfo? firstGpu = null;
+            string vendor = parts[0].Trim('"', ' ');
+            long.TryParse(parts[1].Trim('"', ' '), out long vram);
+            string name = parts[2].Trim('"', ' ');
 
-            foreach (string line in lines.Skip(1)) // CSVヘッダーをスキップ
-            {
-                // CSVパース（引用符あり）
-                string[] parts = ParseCsvLine(line);
-                if (parts.Length < 3) continue;
+            if (string.IsNullOrEmpty(vendor)) continue;
 
-                string vendor = parts[0].Trim('"', ' ');
-                long.TryParse(parts[1].Trim('"', ' '), out long vram);
-                string name = parts[2].Trim('"', ' ');
+            var gpuInfo = new GpuInfo(vendor, name, vram > 0 ? vram : null, hasNpu);
 
-                if (string.IsNullOrEmpty(vendor)) continue;
+            // 専用GPUを優先
+            if (IsDiscreteGpu(vendor))
+                return gpuInfo;
 
-                var gpuInfo = new GpuInfo(vendor, name, vram > 0 ? vram : null, hasNpu);
-
-                // 専用GPUを優先
-                if (IsDiscreteGpu(vendor))
-                    return gpuInfo;
-
-                firstGpu ??= gpuInfo;
-            }
-
-            return firstGpu;
+            firstGpu ??= gpuInfo;
         }
-        catch (Exception ex)
-        {
-            _logger.Debug($"Windows GPU検出エラー (PowerShell CIM): {ex.Message}");
-        }
-        return null;
+
+        return firstGpu;
     }
 
     private static string[] ParseCsvLine(string line)
@@ -149,64 +140,43 @@ internal static class GpuDetector
         return result.ToArray();
     }
 
-    private static GpuInfo? DetectGpuLinux()
+    private static GpuInfo? DetectGpuLinux(Func<string, string, string> commandRunner)
     {
-        try
+        string output = commandRunner("lspci", "-nn");
+        foreach (string line in output.Split('\n'))
         {
-            string output = RunCommand("lspci", "-nn");
-            foreach (string line in output.Split('\n'))
-            {
-                if (!line.Contains("VGA", StringComparison.OrdinalIgnoreCase) &&
-                    !line.Contains("3D controller", StringComparison.OrdinalIgnoreCase))
-                    continue;
+            if (!line.Contains("VGA", StringComparison.OrdinalIgnoreCase) &&
+                !line.Contains("3D controller", StringComparison.OrdinalIgnoreCase))
+                continue;
 
-                string vendor = line.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) ? "NVIDIA" :
-                                line.Contains("AMD", StringComparison.OrdinalIgnoreCase) ? "AMD" :
-                                line.Contains("Intel", StringComparison.OrdinalIgnoreCase) ? "Intel" : "Unknown";
+            string vendor = line.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) ? "NVIDIA" :
+                            line.Contains("AMD", StringComparison.OrdinalIgnoreCase) ? "AMD" :
+                            line.Contains("Intel", StringComparison.OrdinalIgnoreCase) ? "Intel" : "Unknown";
 
-                return new GpuInfo(vendor, line.Trim(), null, false);
-            }
+            return new GpuInfo(vendor, line.Trim(), null, false);
         }
-        catch (Exception ex)
-        {
-            _logger.Debug($"Linux GPU検出エラー: {ex.Message}");
-        }
+
         return null;
     }
 
-    private static GpuInfo? DetectGpuMacOs()
+    private static GpuInfo? DetectGpuMacOs(Func<string, string, string> commandRunner)
     {
         // macOSはApple Silicon (Metal) を使用。バリアント選択は不要（単一バイナリ）。
-        try
-        {
-            string output = RunCommand("sysctl", "-n machdep.cpu.brand_string");
-            bool isAppleSilicon = output.Contains("Apple", StringComparison.OrdinalIgnoreCase);
-            return new GpuInfo(
-                isAppleSilicon ? "Apple" : "Intel",
-                output.Trim(),
-                null,
-                isAppleSilicon); // Apple SiliconのNeural EngineをNPUとして検出
-        }
-        catch (Exception ex)
-        {
-            _logger.Debug($"macOS GPU検出エラー: {ex.Message}");
-        }
-        return null;
+        string output = commandRunner("sysctl", "-n machdep.cpu.brand_string");
+        bool isAppleSilicon = output.Contains("Apple", StringComparison.OrdinalIgnoreCase);
+        return new GpuInfo(
+            isAppleSilicon ? "Apple" : "Intel",
+            output.Trim(),
+            null,
+            isAppleSilicon); // Apple SiliconのNeural EngineをNPUとして検出
     }
 
-    private static bool DetectNpu()
+    private static bool DetectNpu(Func<string, string, string> commandRunner)
     {
         // Windows NPU検出: PowerShell CIM使用（wmic廃止対応）
-        try
-        {
-            string output = RunCommand("powershell", "-NoProfile -Command \"Get-CimInstance Win32_PnPEntity | Where-Object { $_.Name -match 'NPU|Neural' } | Select-Object -ExpandProperty Name\"");
-            return output.Contains("NPU", StringComparison.OrdinalIgnoreCase) ||
-                   output.Contains("Neural", StringComparison.OrdinalIgnoreCase);
-        }
-        catch
-        {
-            return false;
-        }
+        string output = commandRunner("powershell", "-NoProfile -Command \"Get-CimInstance Win32_PnPEntity | Where-Object { $_.Name -match 'NPU|Neural' } | Select-Object -ExpandProperty Name\"");
+        return output.Contains("NPU", StringComparison.OrdinalIgnoreCase) ||
+               output.Contains("Neural", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsDiscreteGpu(string vendor)
@@ -227,13 +197,27 @@ internal static class GpuDetector
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        process.Start();
-        string output = process.StandardOutput.ReadToEnd();
+        if (!process.Start())
+        {
+            throw new InvalidOperationException($"'{fileName}' によるハードウェア検出を開始できませんでした。");
+        }
+
+        Task<string> outputTask = process.StandardOutput.ReadToEndAsync();
+        Task<string> errorTask = process.StandardError.ReadToEndAsync();
         if (!process.WaitForExit(5000))
         {
-            try { process.Kill(); } catch { /* ベストエフォート */ }
-            return output;
+            try { process.Kill(entireProcessTree: true); } catch { /* ベストエフォート */ }
+            throw new TimeoutException($"'{fileName}' によるハードウェア検出がタイムアウトしました。");
         }
+
+        string output = outputTask.GetAwaiter().GetResult();
+        string error = errorTask.GetAwaiter().GetResult();
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"'{fileName}' によるハードウェア検出に失敗しました (exit code: {process.ExitCode})。{Environment.NewLine}{error}".TrimEnd());
+        }
+
         return output;
     }
 }

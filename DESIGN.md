@@ -39,7 +39,7 @@ Windows UI 以外のライブラリは `net8.0` / `net10.0`。5 公開パッケ�
 
 ダウンローダーは一意な一時アーカイブと展開先を使い、配備後にマーカーを記録する。Ollama の配備はファイル単位のコピー・上書きであり、ディレクトリ全体のトランザクションではない。Windows/Linux の ROCm は Full 本体を配備後、ROCm 追加アセットを重ねる。macOS は共通アセットを使用する。Linux の Ollama `.tar.zst` 展開は外部 `tar` コマンドを使用する。
 
-GPU 判定は Windows の PowerShell CIM、Linux の `lspci`、macOS の `sysctl` を使用する。NPU 情報も検出するが、専用 NPU 推論経路はない。`CpuOnly` と `Full` は同じ通常アセットを選択し、CPU 専用の別配布物や GPU 無効化設定を意味しない。
+GPU 判定は Windows の PowerShell CIM、Linux の `lspci`、macOS の `sysctl` を使用する。GPU が正常に0件と判定された場合は `CpuOnly` を選ぶが、検出コマンドの起動失敗・異常終了・タイムアウトは例外として呼び出し元へ伝播する。NPU 情報も検出するが、専用 NPU 推論経路はない。`CpuOnly` と `Full` は同じ通常アセットを選択し、CPU 専用の別配布物や GPU 無効化設定を意味しない。
 
 ## Speech と Media
 
@@ -53,13 +53,14 @@ GPU 判定は Windows の PowerShell CIM、Linux の `lspci`、macOS の `sysctl
 
 ## 重要な不変条件と境界
 
-- ダウンロード用と Ollama API 用の `HttpClient` は別インスタンス。送信後に変更できない `BaseAddress` の競合を避ける。DI のキーは `LlmChamberHttpClients.Downloader` / `.Api` で、事前登録されたクライアントを `TryAddKeyedSingleton` により維持する。Speech/Media は Downloader を再利用する。
+- ダウンロード用と Ollama API 用の `HttpClient` は、通信設定と所有権を独立させるため別インスタンス。API の接続先は `OllamaApiClient` が保持して絶対 URI へ解決し、送信後に変更できない `HttpClient.BaseAddress` には書き込まないため、ランタイム再起動後のポート変更にも追従できる。DI のキーは `LlmChamberHttpClients.Downloader` / `.Api` で、事前登録されたクライアントを `TryAddKeyedSingleton` により維持する。Speech/Media は Downloader を再利用する。
 - Factory が生成した両 HttpClient は `LocalLlm` が所有し、破棄時に解放する。DI 経由のクライアントは `LocalLlm` で破棄しない。`LocalLlm` は作成した Speech/Media セッションと Ollama プロセスを停止・破棄する。
 - 標準 HttpClient の Timeout は無制限とし、キャンセルを伝播する。非ストリーミング推論は API クライアントのリンクされた CancellationTokenSource で最大30分に制限する。
 - `RuntimeManager.GetRuntimeVersionAsync()` は稼働中の API を優先し、停止中または API の通常エラー時はキャッシュの `.version` を読む（未取得なら null）。API の `OperationCanceledException` はフォールバックせず伝播し、キャンセルを成功扱いにしない。
+- ライブラリはロガーに依存せず、標準出力や独自ログを生成しない。進捗は既存の `IProgress<DownloadProgress>` とイベントで通知し、処理失敗は後始末を行った上で例外として呼び出し元へ伝播する。
 - 初期化とプロセス起動はそれぞれセマフォで制御する。初期化済みでもプロセスが停止していれば再起動する。起動失敗時や破棄時は管理対象プロセスの終了を試みる。
 - チャットの失敗・キャンセル・ストリーム列挙の途中終了ではユーザーメッセージをロールバックし、完走時だけ応答を履歴へ確定する。`ClearHistory` と履歴上限処理ではシステムメッセージを保持する。履歴操作の lock は送信全体を直列化するものではない。
 - `AutoDownloadRuntime=false` はキャッシュのバイナリ・版・バリアントを確認し、不一致なら例外とする。`AutoPullModel=false` は初期化時の自動取得を抑止するもので、明示的な `EnsureModelAsync` を禁止しない。
 - `UnsupportedPlatformException` は `PlatformNotSupportedException` 派生。他のライブラリ例外は `LlmChamberException` 系。呼び出し元が OS 非対応を標準例外で捕捉できる。
 
-これらの挙動は `test/LlmChamber.Tests/` の LazyInitialization、ChatSession、Vision、Speech、Media、OllamaDownloader、PlatformInfo、Adversarial 系テストなどで検証する。ログは SuperLightLogger の `LogManager` から取得し、DI に `ILogger<T>` の登録は要求しない。
+これらの挙動は `test/LlmChamber.Tests/` の LazyInitialization、ChatSession、Vision、Speech、Media、OllamaDownloader、PlatformInfo、Adversarial 系テストなどで検証する。

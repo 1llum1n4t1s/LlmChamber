@@ -9,6 +9,37 @@ namespace LlmChamber.Tests;
 public sealed class RuntimeManagerTests
 {
     [Fact]
+    public async Task StartAsync_WhenProcessCrashes_PropagatesStandardError()
+    {
+        string cacheDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var options = new LlmChamberOptions
+        {
+            CacheDirectory = cacheDirectory,
+            StartupTimeout = TimeSpan.FromSeconds(5),
+        };
+        var processManager = new OllamaProcessManager(Options.Create(options));
+        string failingExecutable = OperatingSystem.IsWindows()
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "reg.exe")
+            : "/bin/sh";
+
+        try
+        {
+            var exception = await Assert.ThrowsAsync<ProcessStartException>(() =>
+                processManager.StartAsync(failingExecutable, TestContext.Current.CancellationToken));
+
+            Assert.False(string.IsNullOrWhiteSpace(exception.StandardError));
+        }
+        finally
+        {
+            processManager.Dispose();
+            if (Directory.Exists(cacheDirectory))
+            {
+                Directory.Delete(cacheDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task GetRuntimeVersionAsync_WhenApiRequestIsCanceled_PropagatesCancellation()
     {
         var options = new LlmChamberOptions

@@ -7,23 +7,23 @@
 - 共通 API と内部実装は `src/LlmChamber.Core/` に置き、各公開パッケージには UI 固有コードを置く。Core のソース取り込み方式を維持し、`bin` / `obj` を取り込まない。Core 自体は NuGet に公開しない。
 - 共通コードは全公開パッケージでコンパイルされる。Core 単体の成功だけで検証を終えず、WPF・WinForms・Avalonia・MAUI への影響を確認する。Core で必要な `System.IO` などは明示的に using し、MAUI と衝突する `SpeechOptions` などはエイリアスで解決する。
 - `Directory.Build.props` の C# 12、nullable、警告をエラーとする設定に従う。公開 API の XML ドキュメントを保つ。
-- 共通依存を変更するときは Core とソースを取り込む各 `.csproj` の参照も照合する。ロギングには既存の `SuperLightLogger.LogManager` / `ILog` を使う。
+- 共通依存を変更するときは Core とソースを取り込む各 `.csproj` の参照も照合する。ライブラリ内部から独自にログを出力せず、失敗は例外として呼び出し元へ伝播する。
 - ランタイム管理、HTTP、チャット、Speech/Media を変更するときは [DESIGN.md の不変条件](DESIGN.md#重要な不変条件と境界) と対応テストを確認する。
 
 ## ビルドと検証
 
-.NET 10 SDK を使用する。ソリューションには Windows UI と MAUI サンプルが含まれるため、全体ビルドには Windows および対象 MAUI workload が必要。公開パッケージの TFM は DESIGN.md を参照する。`global.json` は Microsoft.Testing.Platform を選択しているが、現行テストプロジェクトはその実行連携を設定していないため、`OutputType=Exe` を指定し、xUnit v3 の実行ファイルを `dotnet run` で起動する。
+.NET 10 SDK を使用する。ソリューションには Windows UI と MAUI サンプルが含まれるため、全体ビルドには Windows および対象 MAUI workload が必要。公開パッケージの TFM は DESIGN.md を参照する。`global.json` は Microsoft.Testing.Platform を選択しているため、`OutputType=Exe` を設定した xUnit v3 のテストプロジェクトを `dotnet run` で起動する。
 
 ```powershell
 # ソリューション全体
 dotnet build LlmChamber.slnx
 
 # ユニットテスト（両 TFM）
-dotnet run --project test/LlmChamber.Tests/LlmChamber.Tests.csproj --framework net8.0 -p:OutputType=Exe
-dotnet run --project test/LlmChamber.Tests/LlmChamber.Tests.csproj --framework net10.0 -p:OutputType=Exe
+dotnet run --project test/LlmChamber.Tests/LlmChamber.Tests.csproj --framework net8.0
+dotnet run --project test/LlmChamber.Tests/LlmChamber.Tests.csproj --framework net10.0
 
 # 対象を絞った確認
-dotnet run --project test/LlmChamber.Tests/LlmChamber.Tests.csproj --framework net10.0 -p:OutputType=Exe -- -class LlmChamber.Tests.OllamaModelsTests
+dotnet run --project test/LlmChamber.Tests/LlmChamber.Tests.csproj --framework net10.0 -- -class LlmChamber.Tests.OllamaModelsTests
 
 # パッケージ生成の確認が必要な場合
 dotnet pack LlmChamber.slnx -c Release -o artifacts

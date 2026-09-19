@@ -82,11 +82,17 @@ LlmChamberは内部で2つの `HttpClient` を Keyed Services で登録してい
 ```csharp
 // プロキシ経由でGitHub Releasesからダウンロードする例
 services.AddKeyedSingleton<HttpClient>(LlmChamberHttpClients.Downloader, (sp, key) =>
-    new HttpClient(new HttpClientHandler { Proxy = new WebProxy("http://proxy:8080") }));
+    new HttpClient(new HttpClientHandler { Proxy = new WebProxy("http://proxy:8080") })
+    {
+        Timeout = Timeout.InfiniteTimeSpan,
+    });
 
 // Ollama APIクライアントのカスタマイズ
 services.AddKeyedSingleton<HttpClient>(LlmChamberHttpClients.Api, (sp, key) =>
-    new HttpClient(customHandler));
+    new HttpClient(customHandler)
+    {
+        Timeout = Timeout.InfiniteTimeSpan,
+    });
 
 services.AddLlmChamber();
 ```
@@ -169,6 +175,22 @@ llm.ModelDownloadProgress += (_, p) =>
     Console.Write($"\rモデル: {p.Percentage:F1}%");
 
 await llm.InitializeAsync();
+```
+
+## エラー処理
+
+LlmChamber は標準出力や独自ログへエラーを出力しません。ランタイムの取得・起動、API、音声、動画処理の失敗は `LlmChamberException` 系の例外または原因となったシステム例外として呼び出し元へ伝播するため、呼び出し側で必要な記録や UI 通知を行ってください。
+
+```csharp
+try
+{
+    await llm.InitializeAsync();
+}
+catch (Exception ex)
+{
+    appLogger.LogError(ex, "ローカル LLM の初期化に失敗しました。");
+    throw;
+}
 ```
 
 ## 🖼️ 画像入力 (Vision)

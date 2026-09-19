@@ -3,7 +3,6 @@ using System.IO.Compression;
 using System.Formats.Tar;
 using System.Net.Http;
 using LlmChamber.Speech;
-using SuperLightLogger;
 
 namespace LlmChamber.Internal.Speech;
 
@@ -17,7 +16,6 @@ internal sealed class PiperBinaryDownloader
     private const string PiperReleaseUrlTemplate =
         "https://github.com/rhasspy/piper/releases/download/{0}/{1}";
 
-    private static readonly ILog _logger = LogManager.GetLogger<PiperBinaryDownloader>();
     private readonly HttpClient _httpClient;
 
     public PiperBinaryDownloader(HttpClient httpClient)
@@ -29,7 +27,8 @@ internal sealed class PiperBinaryDownloader
     public async Task<string> EnsureBinaryAsync(
         string targetDirectory,
         IProgress<DownloadProgress>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool allowDownload = true)
     {
         var os = PlatformInfo.GetCurrentOs();
         var arch = PlatformInfo.GetCurrentArchitecture();
@@ -45,9 +44,16 @@ internal sealed class PiperBinaryDownloader
             string installedVersion = (await File.ReadAllTextAsync(versionMarkerPath, cancellationToken)).Trim();
             if (installedVersion == DefaultPiperVersion)
             {
-                _logger.Debug($"Piperバイナリが既に存在します: {binaryPath} ({DefaultPiperVersion})");
                 return binaryPath;
             }
+        }
+
+        if (!allowDownload)
+        {
+            throw new SpeechBinaryNotFoundException(
+                binaryName,
+                $"Piperバイナリがキャッシュに見つからないか、バージョンが一致しません: {binaryPath}。" +
+                "SpeechOptions.AutoDownload を有効にするか、PiperBinaryPath を指定してください。");
         }
 
         (string assetName, string archiveExt) = GetReleaseAsset(os, arch)
@@ -62,7 +68,6 @@ internal sealed class PiperBinaryDownloader
             System.Globalization.CultureInfo.InvariantCulture,
             PiperReleaseUrlTemplate, DefaultPiperVersion, assetName);
 
-        _logger.Info($"Piperバイナリをダウンロード中: {downloadUrl}");
         progress?.Report(new DownloadProgress(0, null, null, $"ダウンロード開始: {assetName}"));
 
         string uniqueId = Guid.NewGuid().ToString("N")[..8];
@@ -80,7 +85,6 @@ internal sealed class PiperBinaryDownloader
             MergeExtractedContent(extractDir, piperDir, binaryName, os);
 
             await File.WriteAllTextAsync(versionMarkerPath, DefaultPiperVersion, cancellationToken);
-            _logger.Info($"Piperバイナリのインストール完了: {binaryPath}");
             return binaryPath;
         }
         finally

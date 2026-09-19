@@ -3,7 +3,6 @@ using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
 using LlmChamber.Media;
-using SuperLightLogger;
 
 namespace LlmChamber.Internal.Media;
 
@@ -17,7 +16,6 @@ internal sealed class FFmpegBinaryDownloader
     /// <summary>マーカーファイルに書き込む固定値。autobuild は日付が変わるため特定バージョンの代わりに使う。</summary>
     internal const string MarkerValue = "latest";
 
-    private static readonly ILog _logger = LogManager.GetLogger<FFmpegBinaryDownloader>();
     private readonly HttpClient _httpClient;
 
     public FFmpegBinaryDownloader(HttpClient httpClient)
@@ -29,7 +27,8 @@ internal sealed class FFmpegBinaryDownloader
     public async Task<string> EnsureBinaryAsync(
         string targetDirectory,
         IProgress<DownloadProgress>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool allowDownload = true)
     {
         var os = PlatformInfo.GetCurrentOs();
         var arch = PlatformInfo.GetCurrentArchitecture();
@@ -45,10 +44,15 @@ internal sealed class FFmpegBinaryDownloader
             string installedMarker = (await File.ReadAllTextAsync(markerPath, cancellationToken)).Trim();
             if (installedMarker == MarkerValue)
             {
-                _logger.Debug($"FFmpegバイナリが既に存在します: {binaryPath}");
                 return binaryPath;
             }
-            _logger.Info($"FFmpegマーカーが期待値と不一致 ('{installedMarker}' != '{MarkerValue}')。再ダウンロードします。");
+        }
+
+        if (!allowDownload)
+        {
+            throw new FFmpegBinaryNotFoundException(
+                $"FFmpegバイナリがキャッシュに見つからないか、バージョンが一致しません: {binaryPath}。" +
+                "MediaOptions.AutoDownload を有効にするか、FFmpegBinaryPath を指定してください。");
         }
 
         (string assetName, string archiveExt) = GetReleaseAsset(os, arch)
@@ -60,7 +64,6 @@ internal sealed class FFmpegBinaryDownloader
         Directory.CreateDirectory(ffmpegDir);
         string downloadUrl = FFmpegLatestBaseUrl + assetName;
 
-        _logger.Info($"FFmpegをダウンロード中: {downloadUrl}");
         progress?.Report(new DownloadProgress(0, null, null, $"ダウンロード開始: {assetName}"));
 
         string uniqueId = Guid.NewGuid().ToString("N")[..8];
@@ -80,7 +83,6 @@ internal sealed class FFmpegBinaryDownloader
 
             // FFmpegは autobuild で日付が変わるので固定マーカー値を使用
             await File.WriteAllTextAsync(markerPath, MarkerValue, cancellationToken);
-            _logger.Info($"FFmpegのインストール完了: {binaryPath}");
             return binaryPath;
         }
         finally
@@ -129,30 +131,49 @@ internal sealed class FFmpegBinaryDownloader
 
             using var process = Process.Start(psi)
                 ?? throw new MediaException("tar プロセスの起動に失敗しました。");
-
-            // stderr を WaitForExitAsync 前に非同期で吸い出す。
-            // 後読みだと tar が大量にエラー出力した時に pipe バッファ満杯でデッドロックする
-            var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
-
-            try
-            {
-                await process.WaitForExitAsync(cancellationToken);
-            }
-            catch (OperationCanceledException)
-            {
-                try { process.Kill(entireProcessTree: true); } catch { /* ignore */ }
-                throw;
-            }
-
-            if (process.ExitCode != 0)
-            {
-                string err = await stderrTask;
-                throw new MediaException($"tar 展開に失敗しました (exit {process.ExitCode}): {err}");
-            }
+            await WaitForTarProcessAsync(process, cancellationToken);
         }
         else
         {
             throw new MediaException($"未対応のアーカイブ形式: {archiveExt}");
+        }
+    }
+
+    internal static async Task WaitForTarProcessAsync(
+        Process process,
+        CancellationToken cancellationToken)
+    {
+        // 後読みでは大量のstderrでpipeが詰まるため、終了待機より先に吸い出す。
+        Task<string> stderrTask = process.StandardError.ReadToEndAsync();
+
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            try
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+            }
+            catch
+            {
+                // 呼び出し元のキャンセルを優先する。
+            }
+
+            // 終了・stderrの回収失敗で、元のキャンセルを置き換えない。
+            try { await process.WaitForExitAsync(CancellationToken.None); } catch { /* ベストエフォート */ }
+            try { await stderrTask; } catch { /* ベストエフォート */ }
+            throw;
+        }
+
+        string error = await stderrTask;
+        if (process.ExitCode != 0)
+        {
+            throw new MediaException($"tar 展開に失敗しました (exit {process.ExitCode}): {error}");
         }
     }
 

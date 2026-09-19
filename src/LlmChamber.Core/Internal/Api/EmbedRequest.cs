@@ -11,8 +11,11 @@ internal sealed class EmbedRequest
     public required string Input { get; init; }
 }
 
-internal sealed class EmbedResponse
+internal sealed class EmbedResponse : IOllamaApiResponse
 {
+    [JsonPropertyName("error")]
+    public string? Error { get; init; }
+
     [JsonPropertyName("model")]
     public string Model { get; init; } = "";
 

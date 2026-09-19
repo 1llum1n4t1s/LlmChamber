@@ -3,7 +3,6 @@ using System.Runtime.CompilerServices;
 using LlmChamber.Internal.Media;
 using LlmChamber.Internal.Speech;
 using Microsoft.Extensions.Options;
-using SuperLightLogger;
 // MAUI の Microsoft.Maui.Media.SpeechOptions と名前衝突するためエイリアスで解決
 using SpeechOptions = LlmChamber.Speech.SpeechOptions;
 using ISpeechSession = LlmChamber.Speech.ISpeechSession;
@@ -32,7 +31,6 @@ internal sealed class LocalLlm : ILocalLlm
     private volatile SpeechSession? _speechSession;
     private readonly object _mediaLock = new();
     private volatile VideoSession? _videoSession;
-    private static readonly ILog _logger = LogManager.GetLogger<LocalLlm>();
     private volatile bool _initialized;
     /// <summary>Interlocked.Exchange でアトミック化（0=未破棄, 1=破棄済）。</summary>
     private int _disposed;
@@ -94,7 +92,6 @@ internal sealed class LocalLlm : ILocalLlm
             }
 
             _initialized = true;
-            _logger.Info($"LlmChamber初期化完了。モデル: {_options.DefaultModel}");
         }
         finally
         {
@@ -206,7 +203,6 @@ internal sealed class LocalLlm : ILocalLlm
                 piperBinDl,
                 piperVoiceDl);
 
-            _logger.Debug("Speech セッションを作成しました（バイナリDLは初回利用時まで遅延されます）");
             return _speechSession;
         }
     }
@@ -237,7 +233,6 @@ internal sealed class LocalLlm : ILocalLlm
             };
 
             _videoSession = new VideoSession(mediaOptions, _options.CacheDirectory, ffmpegDownloader, analyzer);
-            _logger.Debug("Media セッションを作成しました（FFmpegDLは初回利用時まで遅延されます）");
             return _videoSession;
         }
     }
@@ -268,10 +263,16 @@ internal sealed class LocalLlm : ILocalLlm
         }
         if (videoToDispose is not null) await videoToDispose.DisposeAsync();
 
-        await _processManager.DisposeAsync();
-        if (_ownsDownloadHttpClient) _downloadHttpClient.Dispose();
-        _ownedApiHttpClient?.Dispose();
-        _initLock.Dispose();
+        try
+        {
+            await _processManager.DisposeAsync();
+        }
+        finally
+        {
+            if (_ownsDownloadHttpClient) _downloadHttpClient.Dispose();
+            _ownedApiHttpClient?.Dispose();
+            _initLock.Dispose();
+        }
     }
 
     public void Dispose()

@@ -2,7 +2,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Formats.Tar;
 using System.Net.Http;
-using SuperLightLogger;
+using System.Diagnostics;
 
 namespace LlmChamber.Internal;
 
@@ -17,8 +17,6 @@ internal sealed class OllamaDownloader
     private const int DownloadBufferSize = 81920; // 80KB
 
     private readonly HttpClient _httpClient;
-    private static readonly ILog _logger = LogManager.GetLogger<OllamaDownloader>();
-
     public OllamaDownloader(HttpClient httpClient)
     {
         _httpClient = httpClient;
@@ -46,7 +44,6 @@ internal sealed class OllamaDownloader
         string? existing = FindExistingBinary(targetDirectory, version, variant);
         if (existing is not null)
         {
-            _logger.Debug($"Ollamaバイナリが既に存在します: {existing} (v{version})");
             return existing;
         }
 
@@ -76,7 +73,6 @@ internal sealed class OllamaDownloader
         string versionMarkerPath = Path.Combine(targetDirectory, ".version");
         await File.WriteAllTextAsync(versionMarkerPath, $"{version}:{variant}", cancellationToken);
 
-        _logger.Info($"Ollamaランタイム v{version} のインストール完了: {binaryPath}");
         progress?.Report(new DownloadProgress(0, null, 100, "インストール完了"));
 
         return binaryPath;
@@ -101,7 +97,6 @@ internal sealed class OllamaDownloader
         string downloadUrl = string.Format(GithubReleaseUrlTemplate, version, downloadFileName);
         string label = phaseLabel ?? downloadFileName;
 
-        _logger.Info($"Ollamaランタイムをダウンロード中: {downloadUrl}");
         progress?.Report(new DownloadProgress(0, null, null, $"ダウンロード開始: {label}"));
 
         var (_, archiveExt) = PlatformInfo.GetOllamaBinaryInfo(os, arch, variant);
@@ -226,28 +221,78 @@ internal sealed class OllamaDownloader
         else if (archivePath.EndsWith(".tar.zst", StringComparison.OrdinalIgnoreCase))
         {
             // .tar.zst — zstd圧縮。標準ライブラリにはzstdがないため外部コマンドで展開
-            var psi = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "tar",
-                Arguments = $"--zstd -xf \"{archivePath}\" -C \"{extractDir}\"",
-                UseShellExecute = false,
-                RedirectStandardError = true,
-                CreateNoWindow = true,
-            };
-            using var process = System.Diagnostics.Process.Start(psi)!;
-            await process.WaitForExitAsync(cancellationToken);
-            if (process.ExitCode != 0)
-            {
-                string error = await process.StandardError.ReadToEndAsync(cancellationToken);
-                throw new RuntimeInstallException(
-                    $"tar展開に失敗しました (exit {process.ExitCode}): {error}",
+            cancellationToken.ThrowIfCancellationRequested();
+            var psi = CreateTarZstdStartInfo(archivePath, extractDir);
+            using var process = Process.Start(psi)
+                ?? throw new RuntimeInstallException(
+                    "tarプロセスの起動に失敗しました。",
                     archivePath: archivePath);
-            }
+            await WaitForTarProcessAsync(process, archivePath, cancellationToken);
         }
         else
         {
             throw new RuntimeInstallException(
                 $"未対応のアーカイブ形式: {archivePath}",
+                archivePath: archivePath);
+        }
+    }
+
+    internal static ProcessStartInfo CreateTarZstdStartInfo(string archivePath, string extractDir)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = "tar",
+            UseShellExecute = false,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+        psi.ArgumentList.Add("--zstd");
+        psi.ArgumentList.Add("-xf");
+        psi.ArgumentList.Add(archivePath);
+        psi.ArgumentList.Add("-C");
+        psi.ArgumentList.Add(extractDir);
+        return psi;
+    }
+
+    internal static async Task WaitForTarProcessAsync(
+        Process process,
+        string archivePath,
+        CancellationToken cancellationToken)
+    {
+        // Wait後の読み取りでは、tarが大量にstderrを出力したときに
+        // pipeバッファが埋まりデッドロックするため、先に非同期で吸い出す。
+        Task<string> stderrTask = process.StandardError.ReadToEndAsync();
+
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            try
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+            }
+            catch
+            {
+                // 呼び出し元のキャンセルを優先する。
+            }
+
+            // 終了・stderrの回収失敗で、元のキャンセルを置き換えない。
+            try { await process.WaitForExitAsync(CancellationToken.None); } catch { /* ベストエフォート */ }
+            try { await stderrTask; } catch { /* ベストエフォート */ }
+
+            throw;
+        }
+
+        string error = await stderrTask;
+        if (process.ExitCode != 0)
+        {
+            throw new RuntimeInstallException(
+                $"tar展開に失敗しました (exit {process.ExitCode}): {error}",
                 archivePath: archivePath);
         }
     }
