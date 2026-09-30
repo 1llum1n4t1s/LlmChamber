@@ -12,6 +12,8 @@ namespace LlmChamber.Internal.Speech;
 /// </summary>
 internal sealed class WhisperBinaryDownloader
 {
+    // 既存の公式バイナリ資産を持つ最新安定版。v1.9.4 はソースのみのため、
+    // 同じ取得方式の安定版資産が公開された時点で再確認する。
     internal const string DefaultWhisperVersion = "v1.9.2";
     private const string WhisperReleaseUrlTemplate =
         "https://github.com/ggerganov/whisper.cpp/releases/download/{0}/{1}";
