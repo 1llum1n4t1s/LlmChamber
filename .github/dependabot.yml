@@ -1,40 +1,70 @@
+# 更新方針: 毎週月曜09:00（日本時間）、minor/patchを集約、majorは個別PR。
+# マージ可否は既定ブランチのDependabot auto-mergeが最新CIで判定します。
 version: 2
 updates:
-  - package-ecosystem: "nuget"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-      timezone: "Asia/Tokyo"
-    open-pull-requests-limit: 5
-    groups:
-      nuget-minor-patch:
-        patterns: ["*"]
-        update-types: ["minor", "patch"]
-
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-      timezone: "Asia/Tokyo"
-    open-pull-requests-limit: 5
-    groups:
-      actions:
-        patterns: ["*"]
-        update-types: ["minor", "patch"]
-
-  - package-ecosystem: "dotnet-sdk"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-      timezone: "Asia/Tokyo"
-    open-pull-requests-limit: 5
-    groups:
-      dotnet-sdk-minor-patch:
-        patterns: ["*"]
-        update-types: ["minor", "patch"]
+- package-ecosystem: github-actions
+  directory: /
+  schedule:
+    interval: weekly
+    day: monday
+    time: 09:00
+    timezone: Asia/Tokyo
+  open-pull-requests-limit: 5
+  groups:
+    minor-and-patch:
+      patterns:
+      - '*'
+      update-types:
+      - minor
+      - patch
+  commit-message:
+    prefix: deps
+- package-ecosystem: dotnet-sdk
+  directory: /
+  schedule:
+    interval: weekly
+    day: monday
+    time: 09:00
+    timezone: Asia/Tokyo
+  open-pull-requests-limit: 5
+  groups:
+    minor-and-patch:
+      patterns:
+      - '*'
+      update-types:
+      - minor
+      - patch
+  commit-message:
+    prefix: deps
+- package-ecosystem: nuget
+  directories:
+  - /samples/Sample.Avalonia
+  - /samples/Sample.Console
+  - /samples/Sample.Maui
+  - /samples/Sample.WinForms
+  - /samples/Sample.Wpf
+  - /src/LlmChamber
+  - /src/LlmChamber.Avalonia
+  - /src/LlmChamber.Core
+  - /src/LlmChamber.Maui
+  - /src/LlmChamber.WinForms
+  - /src/LlmChamber.Wpf
+  - /test/LlmChamber.IntegrationTests
+  - /test/LlmChamber.Tests
+  schedule:
+    interval: weekly
+    day: monday
+    time: 09:00
+    timezone: Asia/Tokyo
+  open-pull-requests-limit: 5
+  groups:
+    minor-and-patch:
+      patterns:
+      - '*'
+      update-types:
+      - minor
+      - patch
+  commit-message:
+    prefix: deps
+  allow:
+  - dependency-type: all
