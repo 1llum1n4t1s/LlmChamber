@@ -1,0 +1,74 @@
+name: Dependency validation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - name: Prepare MAUI
+        run: |
+          dotnet workload install maui
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build LlmChamber
+        run: |
+          dotnet restore src/LlmChamber/LlmChamber.csproj
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build src/LlmChamber/LlmChamber.csproj -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build LlmChamber.Wpf
+        run: |
+          dotnet restore src/LlmChamber.Wpf/LlmChamber.Wpf.csproj
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build src/LlmChamber.Wpf/LlmChamber.Wpf.csproj -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build LlmChamber.Avalonia
+        run: |
+          dotnet restore src/LlmChamber.Avalonia/LlmChamber.Avalonia.csproj
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build src/LlmChamber.Avalonia/LlmChamber.Avalonia.csproj -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build LlmChamber.WinForms
+        run: |
+          dotnet restore src/LlmChamber.WinForms/LlmChamber.WinForms.csproj
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build src/LlmChamber.WinForms/LlmChamber.WinForms.csproj -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build LlmChamber.Maui
+        run: |
+          dotnet restore src/LlmChamber.Maui/LlmChamber.Maui.csproj
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build src/LlmChamber.Maui/LlmChamber.Maui.csproj -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run existing regression tests
+        run: |
+          dotnet run --project test/LlmChamber.Tests/LlmChamber.Tests.csproj -c Release --framework net8.0
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project test/LlmChamber.Tests/LlmChamber.Tests.csproj -c Release --framework net10.0
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
