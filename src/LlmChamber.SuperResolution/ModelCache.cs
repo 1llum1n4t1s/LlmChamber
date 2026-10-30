@@ -65,4 +65,3 @@ internal static class ModelCache
         return Convert.ToHexString(hash).Equals(model.Sha256, StringComparison.OrdinalIgnoreCase);
     }
 }
-

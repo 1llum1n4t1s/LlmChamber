@@ -151,4 +151,3 @@ public sealed class SuperResolutionTests
         }
     }
 }
-

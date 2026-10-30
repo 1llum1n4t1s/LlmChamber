@@ -1,13 +1,14 @@
+param([string]$PackageDirectory = 'artifacts')
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [xml]$props = Get-Content -LiteralPath (Join-Path $PSScriptRoot '../../Directory.Build.props') -Raw
 $version = [string]$props.Project.PropertyGroup.Version
 if ($env:GITHUB_REF_NAME -like 'release/*' -and $env:GITHUB_REF_NAME -ne "release/$version") { throw 'Release branch/version mismatch' }
 $ids = @('LlmChamber', 'LlmChamber.Wpf', 'LlmChamber.Avalonia', 'LlmChamber.WinForms')
-$files = @(Get-ChildItem -LiteralPath artifacts -Filter '*.nupkg' -File)
+$files = @(Get-ChildItem -LiteralPath $PackageDirectory -Filter '*.nupkg' -File)
 if ($files.Count -ne $ids.Count) { throw 'Unexpected package count' }
 foreach ($id in $ids) {
-    $path = Join-Path (Resolve-Path artifacts).Path "$id.$version.nupkg"
+    $path = Join-Path (Resolve-Path -LiteralPath $PackageDirectory).Path "$id.$version.nupkg"
     $zip = [IO.Compression.ZipFile]::OpenRead($path)
     try {
         $spec = @($zip.Entries | Where-Object FullName -Like '*.nuspec')

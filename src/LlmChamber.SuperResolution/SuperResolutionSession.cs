@@ -179,4 +179,3 @@ public sealed class SuperResolutionSession : IDisposable
         finally { _gate.Release(); }
     }
 }
-

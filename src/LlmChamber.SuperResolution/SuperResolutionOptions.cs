@@ -36,4 +36,3 @@ public sealed class SuperResolutionOptions
 }
 /// <summary>直線アルファの RGBA32 出力。</summary>
 public sealed record SuperResolutionImage(int Width, int Height, byte[] Rgba32);
-
