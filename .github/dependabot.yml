@@ -40,16 +40,16 @@ updates:
   directories:
   - /samples/Sample.Avalonia
   - /samples/Sample.Console
-  - /samples/Sample.Maui
   - /samples/Sample.WinForms
   - /samples/Sample.Wpf
   - /src/LlmChamber
   - /src/LlmChamber.Avalonia
   - /src/LlmChamber.Core
-  - /src/LlmChamber.Maui
+  - /src/LlmChamber.SuperResolution
   - /src/LlmChamber.WinForms
   - /src/LlmChamber.Wpf
   - /test/LlmChamber.IntegrationTests
+  - /test/LlmChamber.SuperResolution.Tests
   - /test/LlmChamber.Tests
   schedule:
     interval: weekly

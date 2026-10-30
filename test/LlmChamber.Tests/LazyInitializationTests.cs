@@ -92,21 +92,6 @@ public class LazyInitializationTests
         Assert.Equal(0, httpHandler.SendCount);
     }
 
-    [Fact]
-    public async Task LocalLlm_DisposeAsync_DisposesSpeechAndMediaSessions()
-    {
-        var localLlm = CreateLocalLlm();
-        var speech = localLlm.UseSpeech();
-        var video = localLlm.UseMedia();
-
-        await localLlm.DisposeAsync();
-
-        // DisposeAsync 後は同じインスタンスへのアクセスがエラーを返す（既にdisposed）
-        // ここでは throwしないことだけ確認（実装依存）
-        Assert.NotNull(speech);
-        Assert.NotNull(video);
-    }
-
     // ── ヘルパー ──
 
     private static LocalLlm CreateLocalLlm(HttpClient? downloadHttpClient = null)

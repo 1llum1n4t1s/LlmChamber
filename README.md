@@ -14,7 +14,7 @@
 - **必要な機能だけ取得** — 音声・動画用バイナリとモデルは、各機能の初回処理時に取得
 - **型安全なC# API** — `IAsyncEnumerable<string>` でストリーミング応答
 - **GPU自動検出** — GPU ベンダーに応じて通常版または ROCm 版を選択。専用 NPU 推論には未対応
-- **UIコントロール付き** — WPF / Avalonia / WinForms / MAUI 用のチャットコントロールを同梱
+- **UIコントロール付き** — WPF / Avalonia / WinForms 用のチャットコントロールを同梱
 
 ## クイックスタート
 
@@ -105,7 +105,6 @@ services.AddLlmChamber();
 | `LlmChamber.Wpf` | WPF用チャットコントロール |
 | `LlmChamber.Avalonia` | Avalonia UI用チャットコントロール（Win/macOS/Linux） |
 | `LlmChamber.WinForms` | WinForms用チャットパネル |
-| `LlmChamber.Maui` | .NET MAUI用チャットビュー |
 
 UIパッケージにはCoreが内蔵されているため、追加でCoreパッケージを参照する必要はありません。
 
@@ -288,6 +287,32 @@ await foreach (var frame in media.ExtractFramesAsync("video.mp4"))
 - **FFmpeg**: Windows x64 / Linux x64・arm64 は BtbN/FFmpeg-Builds から自動DL
 - macOS は `brew install ffmpeg` 推奨、`MediaOptions.FFmpegBinaryPath` で明示パス指定
 
+## 画像の超解像（Windows任意モジュール）
+
+画像の超解像には、Windows専用の任意モジュール `src/LlmChamber.SuperResolution/` を利用できます。現在はNuGet未公開のため、このcsprojをProjectReferenceします。通常のLlmChamberパッケージへの追加依存はありません。ProjectReferenceで利用する実行アプリには `Microsoft.AI.DirectML` 1.15.4も直接PackageReferenceしてください。推移的なbuild資産が親アプリへコピーされないため、`DirectML.dll`を配布物に含めるための参照です。アプリのPlatformTargetはx64またはARM64を明示します。
+
+```csharp
+using LlmChamber.SuperResolution;
+
+using var session = new SuperResolutionSession(new SuperResolutionOptions
+{
+    CacheDirectory = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "MyApp", "SuperResolution"),
+    Model = SuperResolutionModel.RealHatGan, // または RealEsrgan
+});
+// rgba32は直線アルファのRGBA32、width/heightは入力画像の実寸。
+var result = await session.UpscaleAsync(rgba32, width, height,
+    progress: null, cancellationToken: cancellationToken);
+// result.Rgba32 / Width / Heightを利用側で画像ファイルへ保存する。
+```
+
+縦横4倍の出力を返します。DirectMLを優先し、初期化できなければCPUで動作します。PythonやOllamaの起動は不要です。モデルは初回に指定キャッシュへ取得し、サイズとSHA-256を検証します（Real-ESRGAN約64MiB、Real-HAT-GAN約154MiB）。入力・出力の画像ファイル、Exifの向き、上書き回避は利用側で扱います。出力の既定上限は64Mi画素で、`MaximumOutputPixels`で変更できます。
+
+モデルの配布元と条件は[超解像モジュールのNOTICE](src/LlmChamber.SuperResolution/NOTICE.md)を参照してください。
+
+アプリのON操作でモデルを取得する場合は、`await session.EnsureModelAsync(progress, cancellationToken)`を呼べます。このAPIはキャッシュの検証と必要時のダウンロードだけを行い、推論用のORTセッションは初期化しません。`ModelDownloadSizeBytes`は初期化前にも取得できるモデル容量です。
+
 ## WPF / Avalonia でのUI利用
 
 ```xml
@@ -335,7 +360,7 @@ catch (OllamaApiException ex)
 ## 動作要件
 
 - .NET 8.0 以上
-- Windows / macOS / Linux（x64 / arm64）。機能ごとの自動取得範囲は Speech / Media の節を参照。MAUI パッケージはモバイル OS でのランタイム動作を保証しません
+- Windows / macOS / Linux（x64 / arm64）。機能ごとの自動取得範囲は Speech / Media の節を参照
 - Linux での Ollama 自動取得には `.tar.zst` を展開できる `tar` が必要
 - 未取得のランタイム・モデル・音声リソースの取得にはインターネット接続が必要
 - 必要なリソースが揃い、要求するランタイム版とバリアントがキャッシュに一致する場合はオフラインで動作

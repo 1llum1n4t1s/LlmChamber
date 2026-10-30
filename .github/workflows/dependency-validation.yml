@@ -32,10 +32,6 @@ jobs:
           dotnet-version: |
             8.0.x
             10.0.x
-      - name: Prepare MAUI
-        run: |
-          dotnet workload install maui
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build LlmChamber
         run: |
           dotnet restore src/LlmChamber/LlmChamber.csproj
@@ -60,15 +56,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet build src/LlmChamber.WinForms/LlmChamber.WinForms.csproj -c Release --no-restore
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Build LlmChamber.Maui
-        run: |
-          dotnet restore src/LlmChamber.Maui/LlmChamber.Maui.csproj
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet build src/LlmChamber.Maui/LlmChamber.Maui.csproj -c Release --no-restore
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Run existing regression tests
         run: |
           dotnet run --project test/LlmChamber.Tests/LlmChamber.Tests.csproj -c Release --framework net8.0
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet run --project test/LlmChamber.Tests/LlmChamber.Tests.csproj -c Release --framework net10.0
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build LlmChamber.SuperResolution
+        run: |
+          dotnet build src/LlmChamber.SuperResolution/LlmChamber.SuperResolution.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run SuperResolution regression tests
+        run: |
+          dotnet run --project test/LlmChamber.SuperResolution.Tests/LlmChamber.SuperResolution.Tests.csproj -c Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

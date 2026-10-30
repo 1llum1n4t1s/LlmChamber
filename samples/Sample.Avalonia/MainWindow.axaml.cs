@@ -7,6 +7,11 @@ namespace Sample.Avalonia;
 public partial class MainWindow : Window
 {
     private ILocalLlm? _llm;
+    private bool _closed;
+    private CancellationTokenSource? _initializeCts;
+    private Task? _initializeTask;
+    private Task? _disposeTask;
+    private bool _cleanupComplete;
 
     public MainWindow()
     {
@@ -22,40 +27,49 @@ public partial class MainWindow : Window
 
         try
         {
+            ChatControl.LlmInstance = null;
+            var previous = _llm;
+            _llm = null;
+            if (previous is not null) await DisposeOwnedAsync(previous);
+            if (_closed) return;
             // 選択されたモデルとバリアントを取得
             var modelId = ((ComboBoxItem)ModelComboBox.SelectedItem!).Content?.ToString() ?? "gemma4-e2b";
             var variantName = ((ComboBoxItem)VariantComboBox.SelectedItem!).Content?.ToString() ?? "Auto";
             var variant = Enum.Parse<RuntimeVariant>(variantName);
 
             // LLMインスタンスを作成
-            _llm = LlmChamberFactory.Create(options =>
+            var llm = LlmChamberFactory.Create(options =>
             {
                 options.DefaultModel = modelId;
                 options.RuntimeVariant = variant;
             });
+            _llm = llm;
 
             // ダウンロード進捗イベントをフック
-            _llm.RuntimeDownloadProgress += (s, progress) =>
+            llm.RuntimeDownloadProgress += (s, progress) =>
             {
                 global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                 {
-                    DownloadProgress.RuntimeProgress = progress;
+                    if (!_closed && ReferenceEquals(_llm, llm)) DownloadProgress.RuntimeProgress = progress;
                 });
             };
 
-            _llm.ModelDownloadProgress += (s, progress) =>
+            llm.ModelDownloadProgress += (s, progress) =>
             {
                 global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                 {
-                    DownloadProgress.ModelProgress = progress;
+                    if (!_closed && ReferenceEquals(_llm, llm)) DownloadProgress.ModelProgress = progress;
                 });
             };
 
             // 初期化を実行
-            await _llm.InitializeAsync();
+            _initializeCts = new CancellationTokenSource();
+            _initializeTask = llm.InitializeAsync(_initializeCts.Token);
+            await _initializeTask;
+            if (_closed) return;
 
             // チャットコントロールにLLMを接続
-            ChatControl.LlmInstance = _llm;
+            ChatControl.LlmInstance = llm;
 
             // UIを切り替え
             DownloadProgress.IsVisible = false;
@@ -64,6 +78,11 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            if (!_closed) ChatControl.LlmInstance = null;
+            var failed = _llm;
+            _llm = null;
+            if (failed is not null) await DisposeOwnedAsync(failed);
+            if (_closed) return;
             DownloadProgress.IsVisible = false;
             StatusBarText.Text = "接続失敗";
 
@@ -86,17 +105,48 @@ public partial class MainWindow : Window
         }
         finally
         {
-            ConnectButton.IsEnabled = true;
+            _initializeCts?.Dispose();
+            _initializeCts = null;
+            _initializeTask = null;
+            if (!_closed) ConnectButton.IsEnabled = true;
         }
     }
 
-    protected override async void OnClosed(EventArgs e)
+    private async Task DisposeOwnedAsync(ILocalLlm llm)
     {
-        base.OnClosed(e);
+        var task = llm.DisposeAsync().AsTask();
+        _disposeTask = task;
+        try { await task; }
+        finally { _disposeTask = null; }
+    }
 
-        if (_llm is not null)
+    protected override async void OnClosing(WindowClosingEventArgs e)
+    {
+        base.OnClosing(e);
+        if (e.Cancel || _cleanupComplete) return;
+        e.Cancel = true;
+        if (_closed) return;
+        _closed = true;
+        ChatControl.LlmInstance = null;
+        var llm = _llm;
+        _llm = null;
+        _initializeCts?.Cancel();
+        var initializeTask = _initializeTask;
+        var disposeTask = _disposeTask;
+        await Task.Yield();
+        try
         {
-            await _llm.DisposeAsync();
+            if (initializeTask is not null)
+            {
+                try { await initializeTask; } catch { /* 接続処理で失敗を処理する。 */ }
+            }
+            if (disposeTask is not null) await disposeTask;
+            if (llm is not null) await llm.DisposeAsync();
+        }
+        finally
+        {
+            _cleanupComplete = true;
+            Close();
         }
     }
 }

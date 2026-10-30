@@ -28,6 +28,7 @@ public partial class ChatControl : UserControl
     private readonly ObservableCollection<ChatMessage> _messages = new();
     private bool _isSending;
     private CancellationTokenSource? _sendCts;
+    private int _sessionVersion;
 
     // UI要素
     private ScrollViewer? _messageScrollViewer;
@@ -79,6 +80,8 @@ public partial class ChatControl : UserControl
 
     private void OnLlmInstanceChanged(ILocalLlm? llm)
     {
+        _sessionVersion++;
+        _sendCts?.Cancel();
         _chatSession = llm?.CreateChatSession();
 
         if (_statusLabel != null && _statusDot != null)
@@ -130,29 +133,33 @@ public partial class ChatControl : UserControl
         if (string.IsNullOrEmpty(text))
             return;
 
+        var session = _chatSession;
+        var sessionVersion = _sessionVersion;
         _isSending = true;
         _inputTextBox.Text = string.Empty;
         UpdateSendButtonState();
 
-        // ユーザーメッセージを追加
-        var userMessage = ChatMessage.FromUser(text);
-        _messages.Add(userMessage);
-        UpdateEmptyHint();
-        await ScrollToBottomAsync();
-
-        // アシスタント応答用のプレースホルダーを追加
-        var assistantMessage = ChatMessage.FromAssistant(string.Empty);
-        _messages.Add(assistantMessage);
-        var assistantIndex = _messages.Count - 1;
-
-        // ステータス更新
-        UpdateStatus("応答中...", global::Avalonia.Media.Brushes.Orange);
-
         _sendCts = new CancellationTokenSource();
+        var assistantIndex = -1;
         try
         {
+            // ユーザーメッセージを追加
+            var userMessage = ChatMessage.FromUser(text);
+            _messages.Add(userMessage);
+            UpdateEmptyHint();
+            await ScrollToBottomAsync();
+            if (sessionVersion != _sessionVersion) return;
+
+            // アシスタント応答用のプレースホルダーを追加
+            var assistantMessage = ChatMessage.FromAssistant(string.Empty);
+            _messages.Add(assistantMessage);
+            assistantIndex = _messages.Count - 1;
+
+            // ステータス更新
+            UpdateStatus("応答中...", global::Avalonia.Media.Brushes.Orange, sessionVersion);
+
             var responseBuilder = new System.Text.StringBuilder();
-            await foreach (var token in _chatSession.SendAsync(text, _sendCts.Token))
+            await foreach (var token in session.SendAsync(text, _sendCts.Token))
             {
                 responseBuilder.Append(token);
                 var currentText = responseBuilder.ToString();
@@ -160,25 +167,27 @@ public partial class ChatControl : UserControl
                 // UIスレッドでメッセージを更新
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
+                    if (sessionVersion != _sessionVersion) return;
                     _messages[assistantIndex] = ChatMessage.FromAssistant(currentText);
                 });
                 await ScrollToBottomAsync();
             }
 
-            UpdateStatus("準備完了", global::Avalonia.Media.Brushes.LimeGreen);
+            UpdateStatus("準備完了", global::Avalonia.Media.Brushes.LimeGreen, sessionVersion);
         }
         catch (OperationCanceledException)
         {
-            UpdateStatus("キャンセル", global::Avalonia.Media.Brushes.Gray);
+            UpdateStatus("キャンセル", global::Avalonia.Media.Brushes.Gray, sessionVersion);
         }
         catch (Exception ex)
         {
             // エラーメッセージを表示
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
+                if (sessionVersion != _sessionVersion || assistantIndex < 0) return;
                 _messages[assistantIndex] = ChatMessage.FromAssistant($"[エラー] {ex.Message}");
             });
-            UpdateStatus("エラー", global::Avalonia.Media.Brushes.Red);
+            UpdateStatus("エラー", global::Avalonia.Media.Brushes.Red, sessionVersion);
         }
         finally
         {
@@ -197,10 +206,11 @@ public partial class ChatControl : UserControl
             _inputTextBox.IsEnabled = !_isSending;
     }
 
-    private void UpdateStatus(string text, global::Avalonia.Media.IBrush dotColor)
+    private void UpdateStatus(string text, global::Avalonia.Media.IBrush dotColor, int sessionVersion)
     {
         Dispatcher.UIThread.Post(() =>
         {
+            if (sessionVersion != _sessionVersion) return;
             if (_statusLabel != null) _statusLabel.Text = text;
             if (_statusDot != null) _statusDot.Background = dotColor;
         });

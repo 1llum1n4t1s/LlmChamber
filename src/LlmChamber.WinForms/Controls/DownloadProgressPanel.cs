@@ -125,65 +125,35 @@ public class DownloadProgressPanel : Panel
         Controls.Add(layout);
     }
 
-    private void UpdateRuntimeProgress()
+    private void UpdateRuntimeProgress() => UpdateProgress(() => _runtimeProgress, _runtimeProgressBar, _runtimeStatusLabel, "ランタイム");
+
+    private void UpdateModelProgress() => UpdateProgress(() => _modelProgress, _modelProgressBar, _modelStatusLabel, "モデル");
+
+    private void UpdateProgress(Func<DownloadProgress?> getProgress, ProgressBar progressBar, Label statusLabel, string name)
     {
         void DoUpdate()
         {
-            if (_runtimeProgress == null)
+            var progress = getProgress();
+            if (progress == null)
             {
-                _runtimeStatusLabel.Text = "ランタイム: 待機中";
-                _runtimeProgressBar.Value = 0;
+                statusLabel.Text = $"{name}: 待機中";
+                progressBar.Value = 0;
                 return;
             }
 
-            var progress = _runtimeProgress;
             var percentage = (int)(progress.Percentage ?? 0);
-            _runtimeProgressBar.Value = Math.Clamp(percentage, 0, 100);
+            progressBar.Value = Math.Clamp(percentage, 0, 100);
 
             if (progress.IsCompleted)
             {
-                _runtimeStatusLabel.Text = "ランタイム: ダウンロード完了";
-                _runtimeStatusLabel.ForeColor = Color.Green;
+                statusLabel.Text = $"{name}: ダウンロード完了";
+                statusLabel.ForeColor = Color.Green;
             }
             else
             {
                 var sizeInfo = FormatBytes(progress.BytesDownloaded, progress.TotalBytes);
-                _runtimeStatusLabel.Text = $"ランタイム: {progress.StatusMessage} ({sizeInfo})";
-                _runtimeStatusLabel.ForeColor = SystemColors.ControlText;
-            }
-        }
-
-        if (InvokeRequired)
-            Invoke(DoUpdate);
-        else
-            DoUpdate();
-    }
-
-    private void UpdateModelProgress()
-    {
-        void DoUpdate()
-        {
-            if (_modelProgress == null)
-            {
-                _modelStatusLabel.Text = "モデル: 待機中";
-                _modelProgressBar.Value = 0;
-                return;
-            }
-
-            var progress = _modelProgress;
-            var percentage = (int)(progress.Percentage ?? 0);
-            _modelProgressBar.Value = Math.Clamp(percentage, 0, 100);
-
-            if (progress.IsCompleted)
-            {
-                _modelStatusLabel.Text = "モデル: ダウンロード完了";
-                _modelStatusLabel.ForeColor = Color.Green;
-            }
-            else
-            {
-                var sizeInfo = FormatBytes(progress.BytesDownloaded, progress.TotalBytes);
-                _modelStatusLabel.Text = $"モデル: {progress.StatusMessage} ({sizeInfo})";
-                _modelStatusLabel.ForeColor = SystemColors.ControlText;
+                statusLabel.Text = $"{name}: {progress.StatusMessage} ({sizeInfo})";
+                statusLabel.ForeColor = SystemColors.ControlText;
             }
         }
 

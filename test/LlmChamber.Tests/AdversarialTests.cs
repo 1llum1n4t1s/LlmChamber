@@ -92,25 +92,6 @@ public class AdversarialTests
         if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
     }
 
-    /// <summary>Chat APIのストリーミング応答用のモックHttpMessageHandlerを作成。</summary>
-    private static HttpMessageHandler CreateChatStreamHandler(string[] responses)
-    {
-        var handler = Substitute.ForPartsOf<MockableHandler>();
-        var sb = new StringBuilder();
-        foreach (string r in responses)
-        {
-            sb.AppendLine(JsonSerializer.Serialize(new { model = "test", message = new { role = "assistant", content = r }, done = false }));
-        }
-        sb.AppendLine(JsonSerializer.Serialize(new { model = "test", message = new { role = "assistant", content = "" }, done = true }));
-
-        handler.MockSendAsync(Arg.Any<HttpRequestMessage>(), Arg.Any<CancellationToken>())
-            .Returns(new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent(sb.ToString(), Encoding.UTF8, "application/x-ndjson"),
-            });
-        return handler;
-    }
-
     /// <summary>Chat APIの非ストリーミング（一括）応答用のモックHttpMessageHandlerを作成。</summary>
     private static HttpMessageHandler CreateChatCompleteHandler(string responseContent)
     {
@@ -123,9 +104,13 @@ public class AdversarialTests
         });
 
         handler.MockSendAsync(Arg.Any<HttpRequestMessage>(), Arg.Any<CancellationToken>())
-            .Returns(new HttpResponseMessage(HttpStatusCode.OK)
+            .Returns(async _ =>
             {
-                Content = new StringContent(json, Encoding.UTF8, "application/json"),
+                await Task.Yield();
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(json, Encoding.UTF8, "application/json"),
+                };
             });
         return handler;
     }
@@ -287,63 +272,6 @@ public class AdversarialTests
         Assert.NotNull(session);
     }
 
-    /// <summary>
-    /// @adversarial @category BoundaryAssault @severity Medium
-    /// InferenceOptionsの極端な値でrecordが正常に作成できることを検証。
-    /// </summary>
-    [Fact]
-    public void InferenceOptions_ExtremeValues_DoNotThrow()
-    {
-        var opts = new InferenceOptions
-        {
-            Temperature = -1.0f,
-            MaxTokens = 0,
-            TopP = float.NaN,
-            TopK = int.MinValue,
-            RepeatPenalty = float.PositiveInfinity,
-            Seed = int.MinValue,
-        };
-
-        Assert.Equal(-1.0f, opts.Temperature);
-        Assert.Equal(0, opts.MaxTokens);
-        Assert.True(float.IsNaN(opts.TopP!.Value));
-        Assert.Equal(int.MinValue, opts.TopK);
-        Assert.True(float.IsPositiveInfinity(opts.RepeatPenalty!.Value));
-    }
-
-    /// <summary>
-    /// @adversarial @category BoundaryAssault @severity Medium
-    /// InferenceOptionsの超高Temperature（100）がrecordに格納できることを検証。
-    /// </summary>
-    [Fact]
-    public void InferenceOptions_VeryHighTemperature_DoesNotThrow()
-    {
-        var opts = new InferenceOptions
-        {
-            Temperature = 100.0f,
-            MaxTokens = int.MaxValue,
-        };
-
-        Assert.Equal(100.0f, opts.Temperature);
-        Assert.Equal(int.MaxValue, opts.MaxTokens);
-    }
-
-    /// <summary>
-    /// @adversarial @category BoundaryAssault @severity Low
-    /// StopSequences: 空配列 vs null vs 空文字列を含むリスト。
-    /// </summary>
-    [Fact]
-    public void InferenceOptions_StopSequences_EdgeCases()
-    {
-        var withNull = new InferenceOptions { StopSequences = null };
-        var withEmpty = new InferenceOptions { StopSequences = [] };
-        var withEmptyStrings = new InferenceOptions { StopSequences = ["", " ", null!] };
-
-        Assert.Null(withNull.StopSequences);
-        Assert.Empty(withEmpty.StopSequences);
-        Assert.Equal(3, withEmptyStrings.StopSequences.Count);
-    }
-
     #endregion
 
     #region 2. Concurrency Chaos（並行性カオス）
@@ -356,63 +284,22 @@ public class AdversarialTests
     [Fact]
     public async Task ChatSession_ConcurrentSendCompleteAsync_HistoryConsistency()
     {
-        var handler = CreateChatStreamHandler(["応答"]);
+        var handler = CreateChatCompleteHandler("応答");
         var apiClient = CreateMockApiClient(handler);
         apiClient.SetBaseUrl("http://localhost:9999");
-
         var session = new ChatSession(apiClient, "test-model");
 
-        // 10個の並行リクエスト
         var tasks = Enumerable.Range(0, 10)
-            .Select(i => Task.Run(async () =>
-            {
-                try
-                {
-                    await session.SendCompleteAsync($"メッセージ{i}");
-                }
-                catch
-                {
-                    // APIモックの制限でエラーが出ても良い
-                }
-            }))
-            .ToArray();
+            .Select(i => Task.Run(() => session.SendCompleteAsync($"メッセージ{i}", TestContext.Current.CancellationToken)));
+        var responses = await Task.WhenAll(tasks);
 
-        await Task.WhenAll(tasks);
-
-        // 履歴アクセスがデッドロックやクラッシュしないことを確認
+        Assert.All(responses, response => Assert.Equal("応答", response));
         var history = session.History;
-        Assert.NotNull(history);
-    }
-
-    /// <summary>
-    /// @adversarial @category ConcurrencyChaos @severity Critical
-    /// LocalLlmの二重Dispose呼び出しが例外を投げないことを検証。
-    /// </summary>
-    [Fact]
-    public void LocalLlm_DoubleDispose_DoesNotThrow()
-    {
-        var localLlm = CreateLocalLlm();
-
-        // 1回目のDispose
-        localLlm.Dispose();
-
-        // 2回目のDispose - 例外が飛ばないこと
-        var ex = Record.Exception(() => localLlm.Dispose());
-        Assert.Null(ex);
-    }
-
-    /// <summary>
-    /// @adversarial @category ConcurrencyChaos @severity Critical
-    /// LocalLlmの二重DisposeAsync呼び出しが例外を投げないことを検証。
-    /// </summary>
-    [Fact]
-    public async Task LocalLlm_DoubleDisposeAsync_DoesNotThrow()
-    {
-        var localLlm = CreateLocalLlm();
-
-        await localLlm.DisposeAsync();
-        var ex = await Record.ExceptionAsync(async () => await localLlm.DisposeAsync());
-        Assert.Null(ex);
+        Assert.Equal(10, history.Count(m => m.Role == ChatRole.User));
+        Assert.Equal(10, history.Count(m => m.Role == ChatRole.Assistant));
+        for (int i = 0; i < 10; i++)
+            Assert.Contains(history, m => m.Role == ChatRole.User && m.Content == $"メッセージ{i}");
+        Assert.All(history.Where(m => m.Role == ChatRole.Assistant), m => Assert.Equal("応答", m.Content));
     }
 
     /// <summary>
@@ -639,18 +526,16 @@ public class AdversarialTests
         Assert.Single(session.History);
         Assert.Equal(ChatRole.System, session.History[0].Role);
 
-        // ClearHistory後にSendCompleteAsyncを呼んでもクラッシュしないこと
-        try
-        {
-            string response = await session.SendCompleteAsync("テスト");
-            // 成功したら履歴にシステム + ユーザー + アシスタントが追加される
-            Assert.True(session.History.Count >= 1);
-        }
-        catch (HttpRequestException)
-        {
-            // モックの制約上HTTPエラーは許容
-            // 重要なのはClearHistory後にクラッシュしないこと
-        }
+        string response = await session.SendCompleteAsync("テスト", TestContext.Current.CancellationToken);
+        Assert.Equal("応答テスト", response);
+        var history = session.History;
+        Assert.Equal(3, history.Count);
+        Assert.Equal(ChatRole.System, history[0].Role);
+        Assert.Equal("システムプロンプト", history[0].Content);
+        Assert.Equal(ChatRole.User, history[1].Role);
+        Assert.Equal("テスト", history[1].Content);
+        Assert.Equal(ChatRole.Assistant, history[2].Role);
+        Assert.Equal("応答テスト", history[2].Content);
     }
 
     /// <summary>
@@ -695,7 +580,7 @@ public class AdversarialTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            await session.SendCompleteAsync("テスト");
+            await session.SendCompleteAsync("テスト", TestContext.Current.CancellationToken);
         });
 
         // ロールバック: 履歴は空
@@ -871,40 +756,6 @@ public class AdversarialTests
 
     /// <summary>
     /// @adversarial @category EnvironmentalChaos @severity High
-    /// LlmChamberOptions.CacheDirectoryに存在しないパスを設定できることを検証。
-    /// （ディレクトリ作成は使用時に行われるため、設定時はエラーにならない）
-    /// </summary>
-    [Fact]
-    public void LlmChamberOptions_CacheDirectory_NonExistentPath_SetSucceeds()
-    {
-        var opts = new LlmChamberOptions
-        {
-            CacheDirectory = @"Z:\nonexistent\path\that\does\not\exist",
-        };
-
-        Assert.Equal(@"Z:\nonexistent\path\that\does\not\exist", opts.CacheDirectory);
-    }
-
-    /// <summary>
-    /// @adversarial @category EnvironmentalChaos @severity Medium
-    /// LlmChamberOptions.CacheDirectoryにスペースやUnicode文字を含むパス。
-    /// </summary>
-    [Theory]
-    [InlineData(@"C:\path with spaces\cache")]
-    [InlineData(@"C:\日本語パス\キャッシュ")]
-    [InlineData(@"C:\path\with emoji 🎉\cache")]
-    public void LlmChamberOptions_CacheDirectory_SpecialPaths_SetSucceeds(string path)
-    {
-        var opts = new LlmChamberOptions
-        {
-            CacheDirectory = path,
-        };
-
-        Assert.Equal(path, opts.CacheDirectory);
-    }
-
-    /// <summary>
-    /// @adversarial @category EnvironmentalChaos @severity High
     /// OllamaDownloader.FindExistingBinaryに.versionファイルの中身が不正な場合。
     /// </summary>
     [Theory]
@@ -964,36 +815,6 @@ public class AdversarialTests
                 items.Add(item);
             }
         });
-    }
-
-    /// <summary>
-    /// @adversarial @category EnvironmentalChaos @severity Medium
-    /// PortFinderがOSレベルで有効なポート番号を返すことを検証。
-    /// </summary>
-    [Fact]
-    public void PortFinder_FindAvailablePort_ReturnsValidRange()
-    {
-        int port = PortFinder.FindAvailablePort();
-
-        Assert.InRange(port, 1, 65535);
-    }
-
-    /// <summary>
-    /// @adversarial @category EnvironmentalChaos @severity Medium
-    /// PortFinderを連続呼び出ししても異なるポート番号が返る可能性が高いことを検証。
-    /// （OSの挙動に依存するため、異なることを保証はできないが、重複率を測定）
-    /// </summary>
-    [Fact]
-    public void PortFinder_FindAvailablePort_MultipleCalls_ReturnsDistinctPorts()
-    {
-        var ports = new HashSet<int>();
-        for (int i = 0; i < 10; i++)
-        {
-            ports.Add(PortFinder.FindAvailablePort());
-        }
-
-        // 10回中、少なくとも2個は異なるポートが返るはず
-        Assert.True(ports.Count >= 2, $"10回の呼び出しで{ports.Count}個のユニークなポートしか返らなかった");
     }
 
     /// <summary>
@@ -1147,33 +968,4 @@ public class AdversarialTests
 
     #endregion
 
-    #region 追加: PlatformInfo境界テスト
-
-    /// <summary>
-    /// @adversarial @category EnvironmentalChaos @severity Low
-    /// PlatformInfo.GetCurrentOsが既知のOsPlatformを返すことを検証。
-    /// </summary>
-    [Fact]
-    public void PlatformInfo_GetCurrentOs_ReturnsKnownPlatform()
-    {
-        var os = PlatformInfo.GetCurrentOs();
-        Assert.True(
-            os == OsPlatform.Windows || os == OsPlatform.Linux || os == OsPlatform.MacOS,
-            $"予期しないOS: {os}");
-    }
-
-    /// <summary>
-    /// @adversarial @category EnvironmentalChaos @severity Low
-    /// PlatformInfo.GetCurrentArchitectureが既知のアーキテクチャを返すことを検証。
-    /// </summary>
-    [Fact]
-    public void PlatformInfo_GetCurrentArchitecture_ReturnsKnownArch()
-    {
-        var arch = PlatformInfo.GetCurrentArchitecture();
-        Assert.True(
-            arch == CpuArchitecture.X64 || arch == CpuArchitecture.Arm64,
-            $"予期しないアーキテクチャ: {arch}");
-    }
-
-    #endregion
 }

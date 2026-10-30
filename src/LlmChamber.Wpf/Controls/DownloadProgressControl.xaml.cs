@@ -85,52 +85,31 @@ public partial class DownloadProgressControl : UserControl
 
     // ── UI更新 ──
 
-    private void UpdateRuntimeUI()
+    private void UpdateRuntimeUI() => UpdateProgressUI(RuntimeProgress, RuntimeProgressBar, RuntimeStatusText);
+
+    private void UpdateModelUI() => UpdateProgressUI(ModelProgress, ModelProgressBar, ModelStatusText);
+
+    private static void UpdateProgressUI(DownloadProgress? progress, ProgressBar progressBar, TextBlock statusText)
     {
-        var progress = RuntimeProgress;
         if (progress is null)
         {
-            RuntimeProgressBar.IsIndeterminate = false;
-            RuntimeProgressBar.Value = 0;
-            RuntimeStatusText.Text = "待機中...";
+            progressBar.IsIndeterminate = false;
+            progressBar.Value = 0;
+            statusText.Text = "待機中...";
             return;
         }
 
         if (progress.Percentage.HasValue)
         {
-            RuntimeProgressBar.IsIndeterminate = false;
-            RuntimeProgressBar.Value = progress.Percentage.Value;
+            progressBar.IsIndeterminate = false;
+            progressBar.Value = progress.Percentage.Value;
         }
         else
         {
-            RuntimeProgressBar.IsIndeterminate = true;
+            progressBar.IsIndeterminate = true;
         }
 
-        RuntimeStatusText.Text = FormatStatus(progress);
-    }
-
-    private void UpdateModelUI()
-    {
-        var progress = ModelProgress;
-        if (progress is null)
-        {
-            ModelProgressBar.IsIndeterminate = false;
-            ModelProgressBar.Value = 0;
-            ModelStatusText.Text = "待機中...";
-            return;
-        }
-
-        if (progress.Percentage.HasValue)
-        {
-            ModelProgressBar.IsIndeterminate = false;
-            ModelProgressBar.Value = progress.Percentage.Value;
-        }
-        else
-        {
-            ModelProgressBar.IsIndeterminate = true;
-        }
-
-        ModelStatusText.Text = FormatStatus(progress);
+        statusText.Text = FormatStatus(progress);
     }
 
     private static string FormatStatus(DownloadProgress progress)

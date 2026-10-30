@@ -9,10 +9,10 @@ LlmChamber は .NET アプリからローカル LLM を利用するライブラ�
 | `src/LlmChamber.Core/` | 公開 API、Ollama 管理、Speech/Media の共通実装。内部ビルド・テスト用で `IsPackable=false` |
 | `src/LlmChamber/` | ヘッドレス向け公開パッケージ |
 | `src/LlmChamber.Wpf/`、`src/LlmChamber.WinForms/` | Windows UI。`net8.0-windows` / `net10.0-windows` |
-| `src/LlmChamber.Avalonia/`、`src/LlmChamber.Maui/` | 各 UI フレームワークのコントロール |
+| `src/LlmChamber.Avalonia/` | Avalonia UI のコントロール |
 | `samples/`、`test/` | 各 UI とコンソールの利用例、Core のユニットテストと統合テスト用プロジェクト |
 
-Windows UI 以外のライブラリは `net8.0` / `net10.0`。5 公開パッケージは Core の `.cs` を `Compile Include` で直接取り込み、Core パッケージへの依存を公開しない。各 UI パッケージだけで共通 API も利用できる一方、共通コードの変更はすべての公開プロジェクトのコンパイルに影響する。
+`LlmChamber` と `LlmChamber.Avalonia` は `net8.0` / `net10.0`。4 公開パッケージは Core の `.cs` を `Compile Include` で直接取り込み、Core パッケージへの依存を公開しない。各 UI パッケージだけで共通 API も利用できる一方、共通コードの変更はすべての公開プロジェクトのコンパイルに影響する。
 
 ## 主要コンポーネントとデータフロー
 
@@ -25,6 +25,10 @@ Windows UI 以外のライブラリは `net8.0` / `net10.0`。5 公開パッケ�
 `IRuntimeManager` はランタイム確保、モデル一覧・取得・削除、キャッシュ容量とバージョンを提供する。モデル操作は必要に応じてプロセスを起動するため、`LocalLlm.InitializeAsync()` とは独立して利用できる。
 
 ## リソースとプロセスの境界
+
+画像超解像は `src/LlmChamber.SuperResolution/` の独立したWindows用モジュールです。`SuperResolutionSession` は直線アルファのRGBA32を受け、Real-ESRGAN／Real-HAT-GANのONNXモデルで縦横4倍のRGBA32を返します。ONNX Runtime DirectMLを優先し、初期化できなければCPUを使います。Ollamaや既存Coreには依存させず、既存の4公開パッケージへWindows用の推論依存を持ち込みません。現時点ではNuGetへ公開せず、利用側がProjectReferenceします。
+
+モデルは指定された `CacheDirectory` に初回取得し、固定revision・サイズ・SHA-256を確認してから利用します。同一保存先の取得とセッション内の推論を直列化し、キャンセルは取得とタイル推論へ伝えます。RGBはタイル周辺の重複を付けて推論し、アルファは独立した双線形補間で保持します。画像ファイルのデコード、Exifの向き、ファイルへの保存、上書き回避は呼び出し側の責務です。
 
 既定キャッシュはユーザープロファイル配下の `.llmchamber`。`CacheDirectory` で変更できる。グローバルへのインストールは行わないが、既定キャッシュは実行ファイル隣接でもアプリごとに一意でもない。
 
@@ -49,7 +53,7 @@ GPU 判定は Windows の PowerShell CIM、Linux の `lspci`、macOS の `sysctl
 - Media は初回の解析またはフレーム抽出で FFmpeg を確保する。`FFmpegFrameExtractor` が一時ディレクトリへの画像抽出を完了してから列挙し、`VideoSession` が各フレームを順番に解析する。`LocalLlm` が注入する `FrameAnalyzer` デリゲートを介して Vision API を呼び、Media 実装から `LocalLlm` への直接依存を避ける。抽出だけなら LLM 推論は不要。
 - .NET バインディングの代わりに外部 CLI を使うため、追加機能を未使用なら関連バイナリ・モデル取得を避けられる。一方、利用可能な OS/アーキテクチャは外部アセットに制約される。
 
-コードに定義された自動取得の対応は、Whisper が Windows x64、Piper が Windows x64 と Linux/macOS x64・arm64、FFmpeg が Windows x64 と Linux x64・arm64。Whisper/Piper は各プロジェクトの GitHub Releases、FFmpeg は BtbN/FFmpeg-Builds の latest を参照する。未対応環境では options にバイナリパスを指定する。MAUI パッケージがあること自体はモバイル OS のランタイム対応を保証しない。
+コードに定義された自動取得の対応は、Whisper が Windows x64、Piper が Windows x64 と Linux/macOS x64・arm64、FFmpeg が Windows x64 と Linux x64・arm64。Whisper/Piper は各プロジェクトの GitHub Releases、FFmpeg は BtbN/FFmpeg-Builds の latest を参照する。未対応環境では options にバイナリパスを指定する。
 
 ## 重要な不変条件と境界
 

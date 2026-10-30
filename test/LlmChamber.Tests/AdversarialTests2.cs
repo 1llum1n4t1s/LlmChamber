@@ -1,4 +1,6 @@
 using System.IO;
+using System.Net;
+using System.Net.Http;
 using System.Text;
 using LlmChamber;
 using LlmChamber.Internal;
@@ -115,27 +117,18 @@ public class AdversarialTests2
     /// ChatSession.TrimHistory: MaxHistoryMessages=1 で大量メッセージ追加後も1件のみ保持。
     /// </summary>
     [Fact]
-    public void ChatSession_TrimHistory_MaxOne_KeepsOnlyLatest()
+    public async Task ChatSession_TrimHistory_MaxOne_KeepsOnlyLatest()
     {
-        var apiClient = CreateMockApiClient();
-        var session = new ChatSession(apiClient, "test-model",
+        var session = new ChatSession(CreateMockApiClient(), "test-model",
             new ChatOptions { MaxHistoryMessages = 1 });
 
-        // lockの中で直接_historyを操作するため、リフレクションで内部メソッド呼び出し
-        var addUser = typeof(ChatSession).GetMethod("AddUserMessage",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
-        var addAssistant = typeof(ChatSession).GetMethod("AddAssistantMessage",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
-
         for (int i = 0; i < 50; i++)
-        {
-            addUser.Invoke(session, [$"user-{i}", null]);
-            addAssistant.Invoke(session, [$"assistant-{i}"]);
-        }
+            await session.SendCompleteAsync($"user-{i}", TestContext.Current.CancellationToken);
 
         var history = session.History;
-        // システムメッセージなし、非システムは1件のみ
-        Assert.Equal(1, history.Count);
+        Assert.Single(history);
+        Assert.Equal(ChatRole.Assistant, history[0].Role);
+        Assert.Equal("response", history[0].Content);
     }
 
     /// <summary>
@@ -143,31 +136,20 @@ public class AdversarialTests2
     /// ChatSession.TrimHistory: システムプロンプト付きでMaxHistory制限。
     /// </summary>
     [Fact]
-    public void ChatSession_TrimHistory_WithSystemPrompt_PreservesSystem()
+    public async Task ChatSession_TrimHistory_WithSystemPrompt_PreservesSystem()
     {
-        var apiClient = CreateMockApiClient();
-        var session = new ChatSession(apiClient, "test-model",
+        var session = new ChatSession(CreateMockApiClient(), "test-model",
             new ChatOptions
             {
                 SystemPrompt = "あなたはテスト用AIです",
                 MaxHistoryMessages = 2,
             });
 
-        var addUser = typeof(ChatSession).GetMethod("AddUserMessage",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
-        var addAssistant = typeof(ChatSession).GetMethod("AddAssistantMessage",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
-
         for (int i = 0; i < 10; i++)
-        {
-            addUser.Invoke(session, [$"user-{i}", null]);
-            addAssistant.Invoke(session, [$"assistant-{i}"]);
-        }
+            await session.SendCompleteAsync($"user-{i}", TestContext.Current.CancellationToken);
 
         var history = session.History;
-        // システムメッセージは常に保持
-        Assert.Contains(history, m => m.Role == ChatRole.System);
-        // 非システムメッセージは2件以下
+        Assert.Contains(history, m => m.Role == ChatRole.System && m.Content == "あなたはテスト用AIです");
         Assert.True(history.Count(m => m.Role != ChatRole.System) <= 2);
     }
 
@@ -214,31 +196,18 @@ public class AdversarialTests2
     [Fact]
     public async Task ChatSession_ConcurrentAddAndTrim_NoDeadlock()
     {
-        var apiClient = CreateMockApiClient();
-        var session = new ChatSession(apiClient, "test-model",
+        var session = new ChatSession(CreateMockApiClient(), "test-model",
             new ChatOptions { MaxHistoryMessages = 5 });
 
-        var addUser = typeof(ChatSession).GetMethod("AddUserMessage",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
-        var addAssistant = typeof(ChatSession).GetMethod("AddAssistantMessage",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
-
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        var tasks = Enumerable.Range(0, 10).Select(i => Task.Run(() =>
+        var tasks = Enumerable.Range(0, 10).Select(i => Task.Run(async () =>
         {
             for (int j = 0; j < 20; j++)
-            {
-                cts.Token.ThrowIfCancellationRequested();
-                addUser.Invoke(session, [$"user-{i}-{j}", null]);
-                addAssistant.Invoke(session, [$"assistant-{i}-{j}"]);
-            }
+                await session.SendCompleteAsync($"user-{i}-{j}", cts.Token);
         }, cts.Token)).ToArray();
 
-        await Task.WhenAll(tasks);
-
-        // デッドロックせずに完了し、Historyが取得可能
-        var history = session.History;
-        Assert.NotNull(history);
+        await Task.WhenAll(tasks).WaitAsync(cts.Token);
+        Assert.True(session.History.Count(m => m.Role != ChatRole.System) <= 5);
     }
 
     // ===================================================================
@@ -318,22 +287,19 @@ public class AdversarialTests2
     /// ChatSession: ClearHistory後にHistoryがシステムメッセージのみになること。
     /// </summary>
     [Fact]
-    public void ChatSession_ClearHistory_ThenCheckHistory_SystemOnly()
+    public async Task ChatSession_ClearHistory_ThenCheckHistory_SystemOnly()
     {
-        var apiClient = CreateMockApiClient();
-        var session = new ChatSession(apiClient, "test-model",
+        var session = new ChatSession(CreateMockApiClient(), "test-model",
             new ChatOptions { SystemPrompt = "system prompt" });
-
-        var addUser = typeof(ChatSession).GetMethod("AddUserMessage",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
-        addUser.Invoke(session, ["hello", null]);
-        addUser.Invoke(session, ["world", null]);
+        await session.SendCompleteAsync("hello", TestContext.Current.CancellationToken);
+        await session.SendCompleteAsync("world", TestContext.Current.CancellationToken);
 
         session.ClearHistory();
 
         var history = session.History;
         Assert.Single(history);
         Assert.Equal(ChatRole.System, history[0].Role);
+        Assert.Equal("system prompt", history[0].Content);
     }
 
     /// <summary>
@@ -341,20 +307,19 @@ public class AdversarialTests2
     /// ChatSession: ClearHistory後に再度メッセージ追加可能なこと。
     /// </summary>
     [Fact]
-    public void ChatSession_ClearHistory_ThenAddMessages_Works()
+    public async Task ChatSession_ClearHistory_ThenAddMessages_Works()
     {
-        var apiClient = CreateMockApiClient();
-        var session = new ChatSession(apiClient, "test-model");
-
-        var addUser = typeof(ChatSession).GetMethod("AddUserMessage",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
-        addUser.Invoke(session, ["first", null]);
+        var session = new ChatSession(CreateMockApiClient(), "test-model");
+        await session.SendCompleteAsync("first", TestContext.Current.CancellationToken);
         session.ClearHistory();
-        addUser.Invoke(session, ["after-clear", null]);
+        Assert.Equal("response", await session.SendCompleteAsync("after-clear", TestContext.Current.CancellationToken));
 
         var history = session.History;
-        Assert.Single(history);
+        Assert.Equal(2, history.Count);
+        Assert.Equal(ChatRole.User, history[0].Role);
         Assert.Equal("after-clear", history[0].Content);
+        Assert.Equal(ChatRole.Assistant, history[1].Role);
+        Assert.Equal("response", history[1].Content);
     }
 
     // ===================================================================
@@ -525,7 +490,24 @@ public class AdversarialTests2
     /// <summary>テスト用のOllamaApiClientを作成する。</summary>
     private static OllamaApiClient CreateMockApiClient()
     {
-        return new OllamaApiClient(new System.Net.Http.HttpClient());
+        var client = new OllamaApiClient(new HttpClient(new CompleteResponseHandler()));
+        client.SetBaseUrl("http://localhost:9999");
+        return client;
+    }
+
+    private sealed class CompleteResponseHandler : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            await Task.Yield();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    "{\"model\":\"test\",\"message\":{\"role\":\"assistant\",\"content\":\"response\"},\"done\":true}",
+                    Encoding.UTF8, "application/json"),
+            };
+        }
     }
 
     /// <summary>テスト用のRuntimeManagerを作成する。</summary>

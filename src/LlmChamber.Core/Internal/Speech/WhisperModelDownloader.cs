@@ -62,19 +62,8 @@ internal sealed class WhisperModelDownloader
             long? totalBytes = response.Content.Headers.ContentLength;
 
             await using var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken);
-            await using (var fileStream = new FileStream(tmpPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
-            {
-                byte[] buffer = new byte[81920];
-                long totalRead = 0;
-                int bytesRead;
-                while ((bytesRead = await contentStream.ReadAsync(buffer, cancellationToken)) > 0)
-                {
-                    await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
-                    totalRead += bytesRead;
-                    double? pct = totalBytes.HasValue ? (double)totalRead / totalBytes.Value * 100.0 : null;
-                    progress?.Report(new DownloadProgress(totalRead, totalBytes, pct, $"Whisperモデル {fileName} ダウンロード中..."));
-                }
-            }
+            await HttpFileDownloader.DownloadAsync(contentStream, totalBytes, tmpPath, progress,
+                $"Whisperモデル {fileName} ダウンロード中...", cancellationToken);
 
             // アトミックリネーム（File.Delete→File.Move の TOCTOU を避ける）
             File.Move(tmpPath, modelPath, overwrite: true);

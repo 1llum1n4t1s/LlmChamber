@@ -15,15 +15,12 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: '10.0.x'
-
-      - name: Install MAUI workload
-        run: dotnet workload install maui
 
       - name: Build src projects
         run: |
@@ -31,7 +28,6 @@ jobs:
           dotnet build src/LlmChamber.Wpf/LlmChamber.Wpf.csproj -c Release
           dotnet build src/LlmChamber.Avalonia/LlmChamber.Avalonia.csproj -c Release
           dotnet build src/LlmChamber.WinForms/LlmChamber.WinForms.csproj -c Release
-          dotnet build src/LlmChamber.Maui/LlmChamber.Maui.csproj -c Release
 
       - name: Pack LlmChamber
         run: dotnet pack src/LlmChamber/LlmChamber.csproj -c Release --no-build -o artifacts
@@ -45,8 +41,9 @@ jobs:
       - name: Pack LlmChamber.WinForms
         run: dotnet pack src/LlmChamber.WinForms/LlmChamber.WinForms.csproj -c Release --no-build -o artifacts
 
-      - name: Pack LlmChamber.Maui
-        run: dotnet pack src/LlmChamber.Maui/LlmChamber.Maui.csproj -c Release --no-build -o artifacts
+      - name: Verify release packages
+        shell: pwsh
+        run: ./.github/scripts/Verify-Packages.ps1
 
       - name: Authenticate to NuGet.org
         id: login
@@ -62,8 +59,7 @@ jobs:
             'LlmChamber',
             'LlmChamber.Wpf',
             'LlmChamber.Avalonia',
-            'LlmChamber.WinForms',
-            'LlmChamber.Maui'
+            'LlmChamber.WinForms'
           )
           $packages = foreach ($packageId in $packageIds) {
             $pattern = '^' + [regex]::Escape($packageId) + '\.\d.*\.nupkg$'

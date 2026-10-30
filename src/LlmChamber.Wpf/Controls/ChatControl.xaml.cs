@@ -14,6 +14,7 @@ public partial class ChatControl : UserControl
     private readonly ObservableCollection<ChatMessage> _messages = [];
     private CancellationTokenSource? _streamCts;
     private bool _isSending;
+    private int _sessionVersion;
 
     // ── DependencyProperties ──
 
@@ -91,7 +92,10 @@ public partial class ChatControl : UserControl
     private static void OnChatSessionChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is not ChatControl self) return;
+        self._sessionVersion++;
+        self._streamCts?.Cancel();
         self.SyncHistory();
+        self.UpdateStatus(e.NewValue is null ? "未接続" : "準備完了", self._sessionVersion);
     }
 
     // ── 送信処理 ──
@@ -123,6 +127,7 @@ public partial class ChatControl : UserControl
             UpdateStatus("エラー: ChatSessionが未設定です");
             return;
         }
+        var sessionVersion = _sessionVersion;
 
         _isSending = true;
         IsInputEnabled = false;
@@ -134,7 +139,7 @@ public partial class ChatControl : UserControl
             _messages.Add(ChatMessage.FromUser(text));
             ScrollToBottom();
 
-            UpdateStatus("応答を生成中...");
+            UpdateStatus("応答を生成中...", sessionVersion);
 
             // ストリーミングでアシスタント応答を受信
             _streamCts = new CancellationTokenSource();
@@ -150,21 +155,22 @@ public partial class ChatControl : UserControl
                 // UIスレッドでメッセージを更新
                 await Dispatcher.InvokeAsync(() =>
                 {
+                    if (sessionVersion != _sessionVersion) return;
                     var index = _messages.Count - 1;
                     _messages[index] = assistantMessage with { Content = currentText };
                     ScrollToBottom();
                 });
             }
 
-            UpdateStatus("準備完了");
+            UpdateStatus("準備完了", sessionVersion);
         }
         catch (OperationCanceledException)
         {
-            UpdateStatus("応答がキャンセルされました");
+            UpdateStatus("応答がキャンセルされました", sessionVersion);
         }
         catch (Exception ex)
         {
-            UpdateStatus($"エラー: {ex.Message}");
+            UpdateStatus($"エラー: {ex.Message}", sessionVersion);
         }
         finally
         {
@@ -201,10 +207,11 @@ public partial class ChatControl : UserControl
         }, System.Windows.Threading.DispatcherPriority.Background);
     }
 
-    private void UpdateStatus(string text)
+    private void UpdateStatus(string text, int? sessionVersion = null)
     {
         Dispatcher.InvokeAsync(() =>
         {
+            if (sessionVersion.HasValue && sessionVersion.Value != _sessionVersion) return;
             StatusText.Text = text;
         });
     }

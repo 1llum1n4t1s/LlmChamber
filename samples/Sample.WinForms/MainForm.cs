@@ -12,6 +12,11 @@ public class MainForm : Form
     private readonly ChatPanel _chatPanel;
     private readonly ToolStripStatusLabel _statusLabel;
     private ILocalLlm? _llm;
+    private bool _closed;
+    private CancellationTokenSource? _initializeCts;
+    private Task? _initializeTask;
+    private Task? _disposeTask;
+    private bool _cleanupComplete;
 
     public MainForm()
     {
@@ -84,40 +89,49 @@ public class MainForm : Form
 
         try
         {
+            _chatPanel.LlmInstance = null;
+            var previous = _llm;
+            _llm = null;
+            if (previous is not null) await DisposeOwnedAsync(previous);
+            if (_closed) return;
             // 選択されたモデルとバリアントを取得
             var modelId = _modelCombo.SelectedItem?.ToString() ?? "gemma4-e2b";
             var variantName = _variantCombo.SelectedItem?.ToString() ?? "Auto";
             var variant = Enum.Parse<RuntimeVariant>(variantName);
 
             // LLMインスタンスを作成
-            _llm = LlmChamberFactory.Create(options =>
+            var llm = LlmChamberFactory.Create(options =>
             {
                 options.DefaultModel = modelId;
                 options.RuntimeVariant = variant;
             });
+            _llm = llm;
 
             // ダウンロード進捗イベントをフック
-            _llm.RuntimeDownloadProgress += (s, progress) =>
+            llm.RuntimeDownloadProgress += (s, progress) =>
             {
                 if (InvokeRequired)
-                    Invoke(() => _downloadProgress.RuntimeProgress = progress);
+                    Invoke(() => { if (!_closed && ReferenceEquals(_llm, llm)) _downloadProgress.RuntimeProgress = progress; });
                 else
-                    _downloadProgress.RuntimeProgress = progress;
+                    if (!_closed && ReferenceEquals(_llm, llm)) _downloadProgress.RuntimeProgress = progress;
             };
 
-            _llm.ModelDownloadProgress += (s, progress) =>
+            llm.ModelDownloadProgress += (s, progress) =>
             {
                 if (InvokeRequired)
-                    Invoke(() => _downloadProgress.ModelProgress = progress);
+                    Invoke(() => { if (!_closed && ReferenceEquals(_llm, llm)) _downloadProgress.ModelProgress = progress; });
                 else
-                    _downloadProgress.ModelProgress = progress;
+                    if (!_closed && ReferenceEquals(_llm, llm)) _downloadProgress.ModelProgress = progress;
             };
 
             // 初期化を実行
-            await _llm.InitializeAsync();
+            _initializeCts = new CancellationTokenSource();
+            _initializeTask = llm.InitializeAsync(_initializeCts.Token);
+            await _initializeTask;
+            if (_closed) return;
 
             // チャットパネルにLLMを接続
-            _chatPanel.LlmInstance = _llm;
+            _chatPanel.LlmInstance = llm;
 
             // UIを切り替え
             _downloadProgress.Visible = false;
@@ -126,6 +140,11 @@ public class MainForm : Form
         }
         catch (Exception ex)
         {
+            if (!_closed) _chatPanel.LlmInstance = null;
+            var failed = _llm;
+            _llm = null;
+            if (failed is not null) await DisposeOwnedAsync(failed);
+            if (_closed) return;
             _downloadProgress.Visible = false;
             _statusLabel.Text = "接続失敗";
             MessageBox.Show(
@@ -136,17 +155,48 @@ public class MainForm : Form
         }
         finally
         {
-            _connectButton.Enabled = true;
+            _initializeCts?.Dispose();
+            _initializeCts = null;
+            _initializeTask = null;
+            if (!_closed) _connectButton.Enabled = true;
         }
     }
 
-    protected override async void OnFormClosed(FormClosedEventArgs e)
+    private async Task DisposeOwnedAsync(ILocalLlm llm)
     {
-        base.OnFormClosed(e);
+        var task = llm.DisposeAsync().AsTask();
+        _disposeTask = task;
+        try { await task; }
+        finally { _disposeTask = null; }
+    }
 
-        if (_llm is not null)
+    protected override async void OnFormClosing(FormClosingEventArgs e)
+    {
+        base.OnFormClosing(e);
+        if (e.Cancel || _cleanupComplete) return;
+        e.Cancel = true;
+        if (_closed) return;
+        _closed = true;
+        _chatPanel.LlmInstance = null;
+        var llm = _llm;
+        _llm = null;
+        _initializeCts?.Cancel();
+        var initializeTask = _initializeTask;
+        var disposeTask = _disposeTask;
+        await Task.Yield();
+        try
         {
-            await _llm.DisposeAsync();
+            if (initializeTask is not null)
+            {
+                try { await initializeTask; } catch { /* 接続処理で失敗を処理する。 */ }
+            }
+            if (disposeTask is not null) await disposeTask;
+            if (llm is not null) await llm.DisposeAsync();
+        }
+        finally
+        {
+            _cleanupComplete = true;
+            Close();
         }
     }
 }

@@ -17,6 +17,7 @@ public class ChatPanel : Panel
     private IChatSession? _chatSession;
     private CancellationTokenSource? _currentCts;
     private bool _isSending;
+    private int _sessionVersion;
 
     /// <summary>LLMインスタンス。設定時にChatSessionが自動作成される。</summary>
     [Browsable(false)]
@@ -28,7 +29,7 @@ public class ChatPanel : Panel
         {
             _llmInstance = value;
             // LlmInstance変更時は常に新しいChatSessionを作成
-            _chatSession = _llmInstance?.CreateChatSession();
+            ChatSession = _llmInstance?.CreateChatSession();
         }
     }
 
@@ -38,7 +39,13 @@ public class ChatPanel : Panel
     public IChatSession? ChatSession
     {
         get => _chatSession;
-        set => _chatSession = value;
+        set
+        {
+            if (ReferenceEquals(_chatSession, value)) return;
+            _sessionVersion++;
+            _currentCts?.Cancel();
+            _chatSession = value;
+        }
     }
 
     public ChatPanel()
@@ -112,12 +119,14 @@ public class ChatPanel : Panel
         var message = _inputBox.Text.Trim();
         if (string.IsNullOrEmpty(message)) return;
 
-        if (_chatSession == null)
+        var session = _chatSession;
+        if (session == null)
         {
             AppendMessage("System", "LLMインスタンスが設定されていません。", Color.Red);
             return;
         }
 
+        var sessionVersion = _sessionVersion;
         _isSending = true;
         _inputBox.Clear();
         _inputBox.Enabled = false;
@@ -134,28 +143,28 @@ public class ChatPanel : Panel
             _currentCts = new CancellationTokenSource();
 
             // ストリーミング応答を処理
-            await foreach (var token in _chatSession.SendAsync(message, _currentCts.Token))
+            await foreach (var token in session.SendAsync(message, _currentCts.Token))
             {
                 if (InvokeRequired)
                 {
-                    Invoke(() => AppendStreamToken(token));
+                    Invoke(() => { if (sessionVersion == _sessionVersion) AppendStreamToken(token); });
                 }
                 else
                 {
-                    AppendStreamToken(token);
+                    if (sessionVersion == _sessionVersion) AppendStreamToken(token);
                 }
             }
 
             // 応答の末尾に改行を追加
-            AppendStreamEnd();
+            if (sessionVersion == _sessionVersion) AppendStreamEnd();
         }
         catch (OperationCanceledException)
         {
-            AppendMessage("System", "応答がキャンセルされました。", Color.Gray);
+            if (sessionVersion == _sessionVersion) AppendMessage("System", "応答がキャンセルされました。", Color.Gray);
         }
         catch (Exception ex)
         {
-            AppendMessage("System", $"エラー: {ex.Message}", Color.Red);
+            if (sessionVersion == _sessionVersion) AppendMessage("System", $"エラー: {ex.Message}", Color.Red);
         }
         finally
         {

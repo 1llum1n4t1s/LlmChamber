@@ -100,13 +100,12 @@ internal sealed class PiperRunner
         process.BeginErrorReadLine();
         process.BeginOutputReadLine();
 
-        // テキストを stdin に流す
-        await process.StandardInput.WriteAsync(text.AsMemory(), cancellationToken);
-        await process.StandardInput.FlushAsync(cancellationToken);
-        process.StandardInput.Close();
-
         try
         {
+            // テキストを stdin に流す
+            await process.StandardInput.WriteAsync(text.AsMemory(), cancellationToken);
+            await process.StandardInput.FlushAsync(cancellationToken);
+            process.StandardInput.Close();
             await process.WaitForExitAsync(cancellationToken);
         }
         catch (OperationCanceledException)

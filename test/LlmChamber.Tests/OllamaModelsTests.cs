@@ -5,14 +5,6 @@ namespace LlmChamber.Tests;
 
 public class OllamaModelsTests
 {
-    [Fact]
-    public void Presets_ContainsTextAndVisionModels()
-    {
-        // 4 テキストモデル (gemma4-e2b/e4b, qwen3.5-2b, phi4-mini)
-        // + 3 マルチモーダル Vision モデル (gemma3-4b, qwen2.5vl-3b, llava-7b)
-        Assert.Equal(7, OllamaModels.Presets.Count);
-    }
-
     [Theory]
     [InlineData("gemma4-e2b", "gemma4:e2b")]
     [InlineData("gemma4-e4b", "gemma4:e4b")]

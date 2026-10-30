@@ -3,8 +3,7 @@ using System.Runtime.CompilerServices;
 using LlmChamber.Internal.Media;
 using LlmChamber.Internal.Speech;
 using Microsoft.Extensions.Options;
-// MAUI の Microsoft.Maui.Media.SpeechOptions と名前衝突するためエイリアスで解決
-using SpeechOptions = LlmChamber.Speech.SpeechOptions;
+using LlmChamber.Speech;
 using ISpeechSession = LlmChamber.Speech.ISpeechSession;
 using SpeechSession = LlmChamber.Internal.Speech.SpeechSession;
 using MediaOptions = LlmChamber.Media.MediaOptions;

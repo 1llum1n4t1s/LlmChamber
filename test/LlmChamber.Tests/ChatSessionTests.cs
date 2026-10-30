@@ -29,21 +29,6 @@ public class ChatSessionTests
     }
 
     [Fact]
-    public void ClearHistory_PreservesSystemPrompt()
-    {
-        var apiClient = CreateMockApiClient();
-        var session = new ChatSession(apiClient, "test-model", new ChatOptions
-        {
-            SystemPrompt = "システムプロンプト",
-        });
-
-        session.ClearHistory();
-
-        Assert.Single(session.History);
-        Assert.Equal(ChatRole.System, session.History[0].Role);
-    }
-
-    [Fact]
     public void ClearHistory_WithoutSystemPrompt_EmptiesHistory()
     {
         var apiClient = CreateMockApiClient();

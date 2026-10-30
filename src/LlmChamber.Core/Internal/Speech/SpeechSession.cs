@@ -1,7 +1,5 @@
 using System.IO;
 using LlmChamber.Speech;
-// MAUI の Microsoft.Maui.Media.SpeechOptions と名前衝突するためエイリアスで解決
-using SpeechOptions = LlmChamber.Speech.SpeechOptions;
 
 namespace LlmChamber.Internal.Speech;
 

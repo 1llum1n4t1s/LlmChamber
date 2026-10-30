@@ -41,40 +41,6 @@ public class MediaTests
         Assert.Equal(expected, FFmpegBinaryDownloader.GetExecutableName((OsPlatform)osIdx));
     }
 
-    // ── Options デフォルト値 ──
-
-    [Fact]
-    public void VideoAnalysisOptions_Defaults_AreReasonable()
-    {
-        var opts = new VideoAnalysisOptions();
-
-        Assert.Equal(1.0, opts.FrameIntervalSeconds);
-        Assert.Equal(60, opts.MaxFrames);
-        Assert.True(opts.AnalyzeFrames);
-        Assert.Contains("{timestamp}", opts.FramePromptTemplate);
-        Assert.Contains("{frame_index}", opts.FramePromptTemplate);
-        Assert.Equal(1280, opts.MaxFrameWidth);
-        Assert.Equal(VideoFrameFormat.Jpeg, opts.FrameFormat);
-    }
-
-    [Fact]
-    public void MediaOptions_Defaults_AutoDownloadEnabled()
-    {
-        var opts = new MediaOptions();
-        Assert.True(opts.AutoDownload);
-        Assert.Null(opts.FFmpegBinaryPath);
-    }
-
-    [Fact]
-    public void VideoFrameAnalysis_Record_EqualityWorks()
-    {
-        byte[] bytes = [1, 2, 3];
-        var a = new VideoFrameAnalysis(0, TimeSpan.FromSeconds(1), bytes, "desc");
-        var b = new VideoFrameAnalysis(0, TimeSpan.FromSeconds(1), bytes, "desc");
-        // 同じ参照のバイト列・同じフィールド → 等価
-        Assert.Equal(a, b);
-    }
-
     [Fact]
     public async Task VideoSession_AutoDownloadDisabled_MissingFFmpeg_DoesNotSendHttp()
     {

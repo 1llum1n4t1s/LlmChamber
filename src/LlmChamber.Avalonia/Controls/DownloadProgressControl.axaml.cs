@@ -91,41 +91,28 @@ public partial class DownloadProgressControl : UserControl
         }
     }
 
-    private void UpdateRuntimeProgress(DownloadProgress? progress)
+    private void UpdateRuntimeProgress(DownloadProgress? progress) =>
+        UpdateProgress(progress, _runtimeSection, _runtimeProgressBar, _runtimeStatusText);
+
+    private void UpdateModelProgress(DownloadProgress? progress) =>
+        UpdateProgress(progress, _modelSection, _modelProgressBar, _modelStatusText);
+
+    private void UpdateProgress(DownloadProgress? progress, StackPanel? section, ProgressBar? progressBar, TextBlock? statusText)
     {
-        if (_runtimeSection == null || _runtimeProgressBar == null || _runtimeStatusText == null)
+        if (section == null || progressBar == null || statusText == null)
             return;
 
         if (progress == null)
         {
-            _runtimeSection.IsVisible = false;
+            section.IsVisible = false;
             UpdateIdleVisibility();
             return;
         }
 
-        _runtimeSection.IsVisible = true;
-        _runtimeProgressBar.Value = progress.Percentage ?? 0;
-        _runtimeProgressBar.IsIndeterminate = !progress.Percentage.HasValue;
-        _runtimeStatusText.Text = FormatStatusText(progress);
-        UpdateIdleVisibility();
-    }
-
-    private void UpdateModelProgress(DownloadProgress? progress)
-    {
-        if (_modelSection == null || _modelProgressBar == null || _modelStatusText == null)
-            return;
-
-        if (progress == null)
-        {
-            _modelSection.IsVisible = false;
-            UpdateIdleVisibility();
-            return;
-        }
-
-        _modelSection.IsVisible = true;
-        _modelProgressBar.Value = progress.Percentage ?? 0;
-        _modelProgressBar.IsIndeterminate = !progress.Percentage.HasValue;
-        _modelStatusText.Text = FormatStatusText(progress);
+        section.IsVisible = true;
+        progressBar.Value = progress.Percentage ?? 0;
+        progressBar.IsIndeterminate = !progress.Percentage.HasValue;
+        statusText.Text = FormatStatusText(progress);
         UpdateIdleVisibility();
     }
 
@@ -137,6 +124,7 @@ public partial class DownloadProgressControl : UserControl
         if (string.IsNullOrEmpty(gpuInfo))
         {
             _gpuInfoPanel.IsVisible = false;
+            UpdateIdleVisibility();
             return;
         }
 
