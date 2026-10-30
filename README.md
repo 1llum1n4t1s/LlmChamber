@@ -176,22 +176,6 @@ llm.ModelDownloadProgress += (_, p) =>
 await llm.InitializeAsync();
 ```
 
-## エラー処理
-
-LlmChamber は標準出力や独自ログへエラーを出力しません。ランタイムの取得・起動、API、音声、動画処理の失敗は `LlmChamberException` 系の例外または原因となったシステム例外として呼び出し元へ伝播するため、呼び出し側で必要な記録や UI 通知を行ってください。
-
-```csharp
-try
-{
-    await llm.InitializeAsync();
-}
-catch (Exception ex)
-{
-    appLogger.LogError(ex, "ローカル LLM の初期化に失敗しました。");
-    throw;
-}
-```
-
 ## 🖼️ 画像入力 (Vision)
 
 multimodal モデルを使えば画像 + テキストで質問できます。**追加のNuGet依存ゼロ**:
@@ -289,7 +273,7 @@ await foreach (var frame in media.ExtractFramesAsync("video.mp4"))
 
 ## 画像の超解像（Windows任意モジュール）
 
-画像の超解像には、Windows専用の任意モジュール `src/LlmChamber.SuperResolution/` を利用できます。現在はNuGet未公開のため、このcsprojをProjectReferenceします。通常のLlmChamberパッケージへの追加依存はありません。ProjectReferenceで利用する実行アプリには `Microsoft.AI.DirectML` 1.15.4も直接PackageReferenceしてください。推移的なbuild資産が親アプリへコピーされないため、`DirectML.dll`を配布物に含めるための参照です。アプリのPlatformTargetはx64またはARM64を明示します。
+画像の超解像には、Windows 10（1809）以降専用の任意モジュール `src/LlmChamber.SuperResolution/` を利用できます。現在はNuGet未公開のため、このcsprojをProjectReferenceします。通常のLlmChamberパッケージへの追加依存はありません。ProjectReferenceで利用する実行アプリには `Microsoft.AI.DirectML` 1.15.4も直接PackageReferenceしてください。推移的なbuild資産が親アプリへコピーされないため、`DirectML.dll`を配布物に含めるための参照です。アプリのPlatformTargetはx64またはARM64を明示します。
 
 ```csharp
 using LlmChamber.SuperResolution;
@@ -307,7 +291,7 @@ var result = await session.UpscaleAsync(rgba32, width, height,
 // result.Rgba32 / Width / Heightを利用側で画像ファイルへ保存する。
 ```
 
-縦横4倍の出力を返します。DirectMLを優先し、初期化できなければCPUで動作します。PythonやOllamaの起動は不要です。モデルは初回に指定キャッシュへ取得し、サイズとSHA-256を検証します（Real-ESRGAN約64MiB、Real-HAT-GAN約154MiB）。入力・出力の画像ファイル、Exifの向き、上書き回避は利用側で扱います。出力の既定上限は64Mi画素で、`MaximumOutputPixels`で変更できます。
+縦横4倍の出力を返します。既定ではDirectMLを優先し、ONNX RuntimeがGPU初期化エラーを返した場合はCPUで初期化し直します。`PreferGpu=false` でCPUを指定できます。DLLの読み込み失敗やCPUでの初期化失敗は例外として伝播します。PythonやOllamaの起動は不要です。モデルは初回に指定キャッシュへ取得し、サイズとSHA-256を検証します（Real-ESRGAN約64MiB、Real-HAT-GAN約154MiB）。入力・出力の画像ファイル、Exifの向き、上書き回避は利用側で扱います。出力の既定上限は64Mi画素で、`MaximumOutputPixels`で変更できます。
 
 モデルの配布元と条件は[超解像モジュールのNOTICE](src/LlmChamber.SuperResolution/NOTICE.md)を参照してください。
 
@@ -328,7 +312,9 @@ var result = await session.UpscaleAsync(rgba32, width, height,
 ChatControl.LlmInstance = llm;
 ```
 
-## 例外ハンドリング
+## エラー処理
+
+LlmChamber は標準出力や独自ログへエラーを出力しません。ランタイムの取得・起動、API、音声、動画処理の失敗はライブラリ例外または原因となったシステム例外として呼び出し元へ伝播するため、呼び出し側で必要な記録や UI 通知を行ってください。
 
 ```csharp
 try

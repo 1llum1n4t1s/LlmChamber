@@ -26,7 +26,7 @@ LlmChamber は .NET アプリからローカル LLM を利用するライブラ�
 
 ## リソースとプロセスの境界
 
-画像超解像は `src/LlmChamber.SuperResolution/` の独立したWindows用モジュールです。`SuperResolutionSession` は直線アルファのRGBA32を受け、Real-ESRGAN／Real-HAT-GANのONNXモデルで縦横4倍のRGBA32を返します。ONNX Runtime DirectMLを優先し、初期化できなければCPUを使います。Ollamaや既存Coreには依存させず、既存の4公開パッケージへWindows用の推論依存を持ち込みません。現時点ではNuGetへ公開せず、利用側がProjectReferenceします。
+画像超解像は `src/LlmChamber.SuperResolution/` の独立したWindows用モジュールです。`SuperResolutionSession` は直線アルファのRGBA32を受け、Real-ESRGAN／Real-HAT-GANのONNXモデルで縦横4倍のRGBA32を返します。既定ではONNX Runtime DirectMLを優先し、その初期化が `OnnxRuntimeException` で失敗した場合はCPUで初期化し直します。`PreferGpu=false` なら最初からCPUを使います。CPUでの初期化失敗や、それ以外の例外は呼び出し元へ伝播します。Ollamaや既存Coreには依存させず、既存の4公開パッケージへWindows用の推論依存を持ち込みません。現時点ではNuGetへ公開せず、利用側がProjectReferenceします。
 
 モデルは指定された `CacheDirectory` に初回取得し、固定revision・サイズ・SHA-256を確認してから利用します。同一保存先の取得とセッション内の推論を直列化し、キャンセルは取得とタイル推論へ伝えます。RGBはタイル周辺の重複を付けて推論し、アルファは独立した双線形補間で保持します。画像ファイルのデコード、Exifの向き、ファイルへの保存、上書き回避は呼び出し側の責務です。
 
