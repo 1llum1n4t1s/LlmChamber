@@ -6,7 +6,9 @@ public enum SuperResolutionModel
     /// <summary>Real-ESRGAN x4plus。</summary>
     RealEsrgan,
     /// <summary>Real-HAT-GAN x4。</summary>
-    RealHatGan
+    RealHatGan,
+    /// <summary>Real-HAT-GAN x4 の公式 Sharper モデル。</summary>
+    RealHatGanSharper
 }
 /// <summary>処理段階。</summary>
 public enum SuperResolutionStage

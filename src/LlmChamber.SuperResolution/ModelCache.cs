@@ -9,6 +9,7 @@ internal sealed record ModelInfo(string FileName, string Url, long Size, string 
     {
         SuperResolutionModel.RealEsrgan => new("realesrgan_x4plus.onnx", "https://huggingface.co/anakhiu/realesrgan-onnx/resolve/e2a8b86b2d947b18e024c3975aa13eadcd7751e6/realesrgan_x4plus.onnx", 67051616, "1c0fc21d1d6d7df7f39c1fa23c73138a87a01ea0b3ac56ebd0ea943e62e12800"),
         SuperResolutionModel.RealHatGan => new("real_hat_gan_srx4_fp32.onnx", "https://huggingface.co/HGhog/DeepSR/resolve/c5024d35e1d02be804c6bc8aaba2bfeccc8915f0/models/real_hat_gan_srx4_fp32.onnx", 161884767, "1987067ccf26353c8c4081fd2610347d4a223c9493c57b81777ee6e329a9739a"),
+        SuperResolutionModel.RealHatGanSharper => new("real_hat_gan_srx4_sharper_fp32-9221460944284725.onnx", "https://kiriha.kagayoi.com/models/real_hat_gan_srx4_sharper_fp32-9221460944284725.onnx", 161876133, "9221460944284725fd00ac4da7466376f85f7fc18651312919ed75f0f9a10f48"),
         _ => throw new ArgumentOutOfRangeException(nameof(model))
     };
 }

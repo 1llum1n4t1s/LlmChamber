@@ -31,6 +31,7 @@ public sealed class SuperResolutionTests
     [Theory]
     [InlineData(SuperResolutionModel.RealEsrgan, 67051616L)]
     [InlineData(SuperResolutionModel.RealHatGan, 161884767L)]
+    [InlineData(SuperResolutionModel.RealHatGanSharper, 161876133L)]
     public void ReportsModelDownloadSize(SuperResolutionModel model, long expected)
     {
         using var session = new SuperResolutionSession(new() { CacheDirectory = Path.GetTempPath(), Model = model });
