@@ -4,6 +4,12 @@ Git のバージョン記録・コミット差分と既存の変更履歴をも�
 
 ## 未リリース
 
+## [1.0.7] — 2026-11-01
+
+- Windows向けの任意の画像超解像モジュールに Real-HAT-GAN Sharper を追加（ProjectReference専用、NuGet未公開）。
+- WinForms のチャット表示で、発言者名の太字フォントを解放するよう修正。
+- `AutoPullModel=false` は初期化時の自動取得を省略する設定であることをAPIドキュメントに明記。
+
 ## [1.0.6] — 2026-10-30
 
 - MAUI パッケージとサンプルの提供を終了し、WPF・WinForms・Avalonia とヘッドレスの4パッケージ構成へ整理。

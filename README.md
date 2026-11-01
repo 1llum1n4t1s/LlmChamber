@@ -293,7 +293,7 @@ var result = await session.UpscaleAsync(rgba32, width, height,
 
 縦横4倍の出力を返します。既定ではDirectMLを優先し、ONNX RuntimeがGPU初期化エラーを返した場合はCPUで初期化し直します。`PreferGpu=false` でCPUを指定できます。DLLの読み込み失敗やCPUでの初期化失敗は例外として伝播します。PythonやOllamaの起動は不要です。モデルは初回に指定キャッシュへ取得し、サイズとSHA-256を検証します（Real-ESRGAN約64MiB、Real-HAT-GAN約154MiB）。入力・出力の画像ファイル、Exifの向き、上書き回避は利用側で扱います。出力の既定上限は64Mi画素で、`MaximumOutputPixels`で変更できます。
 
-モデルの配布元と条件は[超解像モジュールのNOTICE](src/LlmChamber.SuperResolution/NOTICE.md)を参照してください。
+`SuperResolutionModel.RealHatGanSharper` を指定すると、Real-HAT-GAN Sharperを使用できます（モデル約154MiB）。このモデルもProjectReference専用の任意モジュールで利用します。モデルの配布元・変換手順・条件は[超解像モジュールのNOTICE](src/LlmChamber.SuperResolution/NOTICE.md)を参照してください。
 
 アプリのON操作でモデルを取得する場合は、`await session.EnsureModelAsync(progress, cancellationToken)`を呼べます。このAPIはキャッシュの検証と必要時のダウンロードだけを行い、推論用のORTセッションは初期化しません。`ModelDownloadSizeBytes`は初期化前にも取得できるモデル容量です。
 
