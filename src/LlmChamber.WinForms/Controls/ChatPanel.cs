@@ -204,7 +204,8 @@ public class ChatPanel : Panel
             _chatDisplay.AppendText($"{role}: ");
             _chatDisplay.Select(startPos, role.Length + 2);
             _chatDisplay.SelectionColor = color;
-            _chatDisplay.SelectionFont = new Font(_chatDisplay.Font, FontStyle.Bold);
+            using var boldFont = new Font(_chatDisplay.Font, FontStyle.Bold);
+            _chatDisplay.SelectionFont = boldFont;
 
             _chatDisplay.Select(_chatDisplay.TextLength, 0);
             _chatDisplay.SelectionFont = _chatDisplay.Font;
@@ -229,7 +230,8 @@ public class ChatPanel : Panel
             _chatDisplay.AppendText("Assistant: ");
             _chatDisplay.Select(startPos, "Assistant: ".Length);
             _chatDisplay.SelectionColor = Color.DarkGreen;
-            _chatDisplay.SelectionFont = new Font(_chatDisplay.Font, FontStyle.Bold);
+            using var boldFont = new Font(_chatDisplay.Font, FontStyle.Bold);
+            _chatDisplay.SelectionFont = boldFont;
             _chatDisplay.Select(_chatDisplay.TextLength, 0);
             _chatDisplay.SelectionFont = _chatDisplay.Font;
             _chatDisplay.SelectionColor = _chatDisplay.ForeColor;
