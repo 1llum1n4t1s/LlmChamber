@@ -1,6 +1,5 @@
 using System.IO;
 using System.Runtime.CompilerServices;
-using System.Text.Json;
 
 namespace LlmChamber.Internal;
 
@@ -10,20 +9,6 @@ namespace LlmChamber.Internal;
 /// </summary>
 internal static class NdjsonStreamReader
 {
-    /// <summary>StreamReaderから行単位でJSONオブジェクトをデシリアライズして返す（テスト用）。</summary>
-    public static async IAsyncEnumerable<T> ReadAsync<T>(
-        StreamReader reader,
-        JsonSerializerOptions? options = null,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        await foreach (string line in ReadLinesAsync(reader, cancellationToken))
-        {
-            T? item = JsonSerializer.Deserialize<T>(line, options);
-            if (item is not null)
-                yield return item;
-        }
-    }
-
     /// <summary>StreamReaderから行単位で生のJSON文字列を返す。</summary>
     public static async IAsyncEnumerable<string> ReadLinesAsync(
         StreamReader reader,

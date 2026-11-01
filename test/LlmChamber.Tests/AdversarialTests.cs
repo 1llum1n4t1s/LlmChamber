@@ -115,6 +115,37 @@ public class AdversarialTests
         return handler;
     }
 
+    /// <summary>生成APIのNDJSON応答を返すテスト用HttpClientを作成。</summary>
+    private static HttpClient CreateGenerateStreamHttpClient(string content)
+        => CreateGenerateStreamHttpClient(new StringContent(content, Encoding.UTF8, "application/x-ndjson"));
+
+    private static HttpClient CreateGenerateStreamHttpClient(HttpContent content)
+    {
+        var handler = Substitute.ForPartsOf<MockableHandler>();
+        handler.MockSendAsync(Arg.Any<HttpRequestMessage>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                call.Arg<CancellationToken>().ThrowIfCancellationRequested();
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = content,
+                });
+            });
+        return new HttpClient(handler) { BaseAddress = new Uri("http://localhost:9999") };
+    }
+
+    /// <summary>最初の行と次の行が別々の非同期読み取りになるストリーム。</summary>
+    private sealed class LineSeparatedStream(byte[] content, int firstLineLength) : MemoryStream(content)
+    {
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            if (Position < firstLineLength)
+                buffer = buffer[..Math.Min(buffer.Length, firstLineLength - (int)Position)];
+
+            return base.ReadAsync(buffer, cancellationToken);
+        }
+    }
+
     /// <summary>NSubstituteでHttpMessageHandlerをモックするためのベースクラス。</summary>
     public abstract class MockableHandler : HttpMessageHandler
     {
@@ -224,15 +255,18 @@ public class AdversarialTests
     /// MaxHistoryMessages=0で履歴が即座に切り詰められることを検証。
     /// </summary>
     [Fact]
-    public void ChatSession_MaxHistoryMessages_Zero_TrimsImmediately()
+    public async Task ChatSession_MaxHistoryMessages_Zero_TrimsImmediately()
     {
-        var apiClient = CreateMockApiClient();
+        var apiClient = CreateMockApiClient(CreateChatCompleteHandler("応答"));
+        apiClient.SetBaseUrl("http://localhost:9999");
         var session = new ChatSession(apiClient, "test-model", new ChatOptions
         {
             MaxHistoryMessages = 0,
         });
 
-        // システムプロンプトなしの場合、履歴は空のまま
+        string response = await session.SendCompleteAsync("メッセージ", TestContext.Current.CancellationToken);
+
+        Assert.Equal("応答", response);
         Assert.Empty(session.History);
     }
 
@@ -243,17 +277,18 @@ public class AdversarialTests
     [Theory]
     [InlineData(-1)]
     [InlineData(int.MinValue)]
-    public void ChatSession_MaxHistoryMessages_Negative_DoesNotCrash(int maxMessages)
+    public async Task ChatSession_MaxHistoryMessages_Negative_DoesNotCrash(int maxMessages)
     {
-        var apiClient = CreateMockApiClient();
+        var apiClient = CreateMockApiClient(CreateChatCompleteHandler("応答"));
+        apiClient.SetBaseUrl("http://localhost:9999");
         var session = new ChatSession(apiClient, "test-model", new ChatOptions
         {
             MaxHistoryMessages = maxMessages,
         });
 
-        // コンストラクタは成功する
-        Assert.NotNull(session);
-        Assert.NotNull(session.History);
+        string response = await session.SendCompleteAsync("メッセージ", TestContext.Current.CancellationToken);
+
+        Assert.Equal("応答", response);
     }
 
     /// <summary>
@@ -261,15 +296,41 @@ public class AdversarialTests
     /// MaxHistoryMessages=int.MaxValueでも問題なく動作することを検証。
     /// </summary>
     [Fact]
-    public void ChatSession_MaxHistoryMessages_IntMaxValue_DoesNotOverflow()
+    public async Task ChatSession_MaxHistoryMessages_IntMaxValue_DoesNotOverflow()
     {
-        var apiClient = CreateMockApiClient();
+        var apiClient = CreateMockApiClient(CreateChatCompleteHandler("応答"));
+        apiClient.SetBaseUrl("http://localhost:9999");
         var session = new ChatSession(apiClient, "test-model", new ChatOptions
         {
             MaxHistoryMessages = int.MaxValue,
         });
 
-        Assert.NotNull(session);
+        string firstResponse = await session.SendCompleteAsync("メッセージ1", TestContext.Current.CancellationToken);
+        string secondResponse = await session.SendCompleteAsync("メッセージ2", TestContext.Current.CancellationToken);
+
+        Assert.Equal("応答", firstResponse);
+        Assert.Equal("応答", secondResponse);
+        Assert.Collection(session.History,
+            message =>
+            {
+                Assert.Equal(ChatRole.User, message.Role);
+                Assert.Equal("メッセージ1", message.Content);
+            },
+            message =>
+            {
+                Assert.Equal(ChatRole.Assistant, message.Role);
+                Assert.Equal("応答", message.Content);
+            },
+            message =>
+            {
+                Assert.Equal(ChatRole.User, message.Role);
+                Assert.Equal("メッセージ2", message.Content);
+            },
+            message =>
+            {
+                Assert.Equal(ChatRole.Assistant, message.Role);
+                Assert.Equal("応答", message.Content);
+            });
     }
 
     #endregion
@@ -361,25 +422,27 @@ public class AdversarialTests
 
     /// <summary>
     /// @adversarial @category ResourceExhaustion @severity High
-    /// NdjsonStreamReaderに10MBの巨大な1行JSONを読ませた場合の動作を検証。
+    /// 生成APIに10MBの巨大な1行JSON応答を返した場合の動作を検証。
     /// </summary>
     [Fact]
-    public async Task NdjsonStreamReader_GiantSingleLine_10MB()
+    public async Task OllamaApiClient_GenerateStreamAsync_GiantSingleLine_10MB()
     {
         // 10MBの巨大JSONオブジェクト
         string value = new('X', 10 * 1024 * 1024);
-        string json = $"{{\"data\":\"{value}\"}}";
+        string json = $"{{\"response\":\"{value}\"}}";
 
-        using var reader = CreateStreamReader(json);
-        var items = new List<JsonElement>();
+        using var httpClient = CreateGenerateStreamHttpClient(json);
+        var apiClient = new OllamaApiClient(httpClient);
+        var items = new List<string>();
 
-        await foreach (var item in NdjsonStreamReader.ReadAsync<JsonElement>(reader))
+        await foreach (string item in apiClient.GenerateStreamAsync("test-model", "prompt",
+            cancellationToken: TestContext.Current.CancellationToken))
         {
             items.Add(item);
         }
 
         Assert.Single(items);
-        Assert.Equal(value, items[0].GetProperty("data").GetString());
+        Assert.Equal(value, items[0]);
     }
 
     /// <summary>
@@ -608,39 +671,42 @@ public class AdversarialTests
 
     /// <summary>
     /// @adversarial @category TypePunching @severity High
-    /// NdjsonStreamReader.ReadAsyncに切り詰められた不正JSONを渡した場合、
+    /// 生成APIに切り詰められた不正JSON応答を返した場合、
     /// JsonExceptionが発生することを検証。
     /// </summary>
     [Fact]
-    public async Task NdjsonStreamReader_ReadAsync_TruncatedJson_ThrowsJsonException()
+    public async Task OllamaApiClient_GenerateStreamAsync_TruncatedJson_ThrowsJsonException()
     {
         string malformedNdjson = "{\"key\":\"value\"\n{\"incomplete\n";
 
-        using var reader = CreateStreamReader(malformedNdjson);
+        using var httpClient = CreateGenerateStreamHttpClient(malformedNdjson);
+        var apiClient = new OllamaApiClient(httpClient);
 
         await Assert.ThrowsAsync<JsonException>(async () =>
         {
-            await foreach (var _ in NdjsonStreamReader.ReadAsync<JsonElement>(reader))
+            await foreach (string _ in apiClient.GenerateStreamAsync("test-model", "prompt",
+                cancellationToken: TestContext.Current.CancellationToken))
             {
-                // 1行目は正常なので通過、2行目で例外
             }
         });
     }
 
     /// <summary>
     /// @adversarial @category TypePunching @severity High
-    /// NdjsonStreamReader.ReadAsyncに余計なカンマを含む不正JSONを渡した場合。
+    /// 生成APIに余計なカンマを含む不正JSON応答を返した場合。
     /// </summary>
     [Fact]
-    public async Task NdjsonStreamReader_ReadAsync_ExtraCommaJson_ThrowsJsonException()
+    public async Task OllamaApiClient_GenerateStreamAsync_ExtraCommaJson_ThrowsJsonException()
     {
         string malformedNdjson = "{\"key\":\"value\",}\n";
 
-        using var reader = CreateStreamReader(malformedNdjson);
+        using var httpClient = CreateGenerateStreamHttpClient(malformedNdjson);
+        var apiClient = new OllamaApiClient(httpClient);
 
         await Assert.ThrowsAsync<JsonException>(async () =>
         {
-            await foreach (var _ in NdjsonStreamReader.ReadAsync<JsonElement>(reader))
+            await foreach (string _ in apiClient.GenerateStreamAsync("test-model", "prompt",
+                cancellationToken: TestContext.Current.CancellationToken))
             {
             }
         });
@@ -671,18 +737,20 @@ public class AdversarialTests
 
     /// <summary>
     /// @adversarial @category TypePunching @severity High
-    /// NdjsonStreamReader.ReadAsyncにネストされたガベージJSON。
+    /// 生成APIにネストされたガベージJSON応答を返した場合。
     /// </summary>
     [Fact]
-    public async Task NdjsonStreamReader_ReadAsync_NestedGarbage_ThrowsJsonException()
+    public async Task OllamaApiClient_GenerateStreamAsync_NestedGarbage_ThrowsJsonException()
     {
         string garbage = "}{}{not json at all}{{\n";
 
-        using var reader = CreateStreamReader(garbage);
+        using var httpClient = CreateGenerateStreamHttpClient(garbage);
+        var apiClient = new OllamaApiClient(httpClient);
 
         await Assert.ThrowsAsync<JsonException>(async () =>
         {
-            await foreach (var _ in NdjsonStreamReader.ReadAsync<JsonElement>(reader))
+            await foreach (string _ in apiClient.GenerateStreamAsync("test-model", "prompt",
+                cancellationToken: TestContext.Current.CancellationToken))
             {
             }
         });
@@ -734,15 +802,17 @@ public class AdversarialTests
 
     /// <summary>
     /// @adversarial @category TypePunching @severity High
-    /// NdjsonStreamReader.ReadAsync: 完全に空のストリーム。
+    /// 生成APIが完全に空のストリームを返した場合。
     /// </summary>
     [Fact]
-    public async Task NdjsonStreamReader_ReadAsync_EmptyStream_ReturnsNothing()
+    public async Task OllamaApiClient_GenerateStreamAsync_EmptyStream_ReturnsNothing()
     {
-        using var reader = CreateStreamReader("");
-        var items = new List<JsonElement>();
+        using var httpClient = CreateGenerateStreamHttpClient("");
+        var apiClient = new OllamaApiClient(httpClient);
+        var items = new List<string>();
 
-        await foreach (var item in NdjsonStreamReader.ReadAsync<JsonElement>(reader))
+        await foreach (string item in apiClient.GenerateStreamAsync("test-model", "prompt",
+            cancellationToken: TestContext.Current.CancellationToken))
         {
             items.Add(item);
         }
@@ -778,15 +848,7 @@ public class AdversarialTests
 
             var downloader = CreateDownloader();
 
-            // 不正な.versionファイルの場合、バージョン不一致でnullが返るか
-            // クラッシュしないことを確認
-            var ex = Record.Exception(() =>
-            {
-                string? result = downloader.FindExistingBinary(tempDir, "0.20.2", RuntimeVariant.Full);
-            });
-
-            // 例外が出ないことが重要（nullを返すのが期待動作）
-            Assert.Null(ex);
+            Assert.Null(downloader.FindExistingBinary(tempDir, "0.20.2", RuntimeVariant.Full));
         }
         finally
         {
@@ -796,24 +858,53 @@ public class AdversarialTests
 
     /// <summary>
     /// @adversarial @category EnvironmentalChaos @severity Critical
-    /// 即座にキャンセルされるCancellationTokenをNdjsonStreamReader.ReadAsyncに渡した場合。
+    /// 即座にキャンセルされるCancellationTokenを生成APIに渡した場合。
     /// </summary>
     [Fact]
-    public async Task NdjsonStreamReader_ReadAsync_ImmediatelyCancelledToken()
+    public async Task OllamaApiClient_GenerateStreamAsync_ImmediatelyCancelledToken()
     {
         string content = "{\"a\":1}\n{\"b\":2}\n";
-        using var reader = CreateStreamReader(content);
-        using var cts = new CancellationTokenSource();
+        using var httpClient = CreateGenerateStreamHttpClient(content);
+        var apiClient = new OllamaApiClient(httpClient);
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         cts.Cancel(); // 即座にキャンセル
 
-        var items = new List<JsonElement>();
+        var items = new List<string>();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
         {
-            await foreach (var item in NdjsonStreamReader.ReadAsync<JsonElement>(reader, cancellationToken: cts.Token))
+            await foreach (string item in apiClient.GenerateStreamAsync("test-model", "prompt",
+                cancellationToken: cts.Token))
             {
                 items.Add(item);
             }
+        });
+    }
+
+    /// <summary>
+    /// @adversarial @category EnvironmentalChaos @severity Critical
+    /// 生成APIの最初の応答取得後にキャンセルすると、次の行の読み取りが中断されること。
+    /// </summary>
+    [Fact]
+    public async Task OllamaApiClient_GenerateStreamAsync_CancelAfterFirstChunk_ThrowsOperationCanceledException()
+    {
+        string firstLine = "{\"response\":\"first\"}\n";
+        string content = firstLine + "{\"response\":\"second\"}\n";
+        using var streamContent = new StreamContent(new LineSeparatedStream(
+            Encoding.UTF8.GetBytes(content), Encoding.UTF8.GetByteCount(firstLine)));
+        using var httpClient = CreateGenerateStreamHttpClient(streamContent);
+        var apiClient = new OllamaApiClient(httpClient);
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        await using var enumerator = apiClient.GenerateStreamAsync("test-model", "prompt",
+            cancellationToken: cts.Token).GetAsyncEnumerator(cts.Token);
+
+        Assert.True(await enumerator.MoveNextAsync());
+        Assert.Equal("first", enumerator.Current);
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await enumerator.MoveNextAsync();
         });
     }
 

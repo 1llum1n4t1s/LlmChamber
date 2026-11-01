@@ -23,7 +23,7 @@ public sealed class LlmChamberOptions
 
     /// <summary>
     /// モデルの自動pullを有効にするかどうか。
-    /// falseの場合、モデルが見つからないと例外が発生する。
+    /// falseの場合、初期化時の自動取得を省略する。
     /// </summary>
     public bool AutoPullModel { get; set; } = true;
 

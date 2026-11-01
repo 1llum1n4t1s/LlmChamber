@@ -116,9 +116,7 @@ internal sealed class ChatSession : IChatSession
         lock (_historyLock)
         {
             // システムプロンプトは保持
-            var systemMessages = _history.Where(m => m.Role == ChatRole.System).ToList();
-            _history.Clear();
-            _history.AddRange(systemMessages);
+            _history.RemoveAll(static m => m.Role != ChatRole.System);
         }
     }
 

@@ -16,7 +16,6 @@ namespace LlmChamber.Internal;
 internal sealed class LocalLlm : ILocalLlm
 {
     private readonly SemaphoreSlim _initLock = new(1, 1);
-    private readonly OllamaDownloader _downloader;
     private readonly OllamaProcessManager _processManager;
     private readonly OllamaApiClient _apiClient;
     private readonly LlmChamberOptions _options;
@@ -45,7 +44,6 @@ internal sealed class LocalLlm : ILocalLlm
         HttpClient? ownedApiHttpClient = null)
     {
         _options = options.Value;
-        _downloader = downloader;
         _processManager = processManager;
         _apiClient = apiClient;
         _downloadHttpClient = downloadHttpClient;

@@ -80,10 +80,9 @@ internal sealed class WhisperRunner
             using var process = Process.Start(psi)
                 ?? throw new SpeechRuntimeException("whisper-cli プロセスの起動に失敗しました。");
 
-            var stdoutBuilder = new StringBuilder();
             var stderrBuilder = new StringBuilder();
 
-            process.OutputDataReceived += (_, e) => { if (e.Data is not null) stdoutBuilder.AppendLine(e.Data); };
+            process.OutputDataReceived += (_, _) => { /* stdout を drain（パイプ詰まり防止） */ };
             process.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderrBuilder.AppendLine(e.Data); };
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
