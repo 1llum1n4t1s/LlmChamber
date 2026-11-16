@@ -1,0 +1,14 @@
+{
+  "solution": {
+    "path": "../LlmChamber.slnx",
+    "projects": [
+      "src/LlmChamber/LlmChamber.csproj",
+      "src/LlmChamber.Wpf/LlmChamber.Wpf.csproj",
+      "src/LlmChamber.Avalonia/LlmChamber.Avalonia.csproj",
+      "src/LlmChamber.WinForms/LlmChamber.WinForms.csproj",
+      "src/LlmChamber.SuperResolution/LlmChamber.SuperResolution.csproj",
+      "test/LlmChamber.Tests/LlmChamber.Tests.csproj",
+      "test/LlmChamber.SuperResolution.Tests/LlmChamber.SuperResolution.Tests.csproj"
+    ]
+  }
+}

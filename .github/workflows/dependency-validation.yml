@@ -32,41 +32,23 @@ jobs:
           dotnet-version: |
             8.0.x
             10.0.x
-      - name: Build LlmChamber
+      # 検証対象(公開4パッケージ・SuperResolution・2つのテスト)を solution filter で1回だけ restore / build する。
+      # 以降のテストは同じ出力を --no-build で使い、再ビルドしない。
+      - name: Restore
         run: |
-          dotnet restore src/LlmChamber/LlmChamber.csproj
+          dotnet restore .github/LlmChamber.ci.slnf
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet build src/LlmChamber/LlmChamber.csproj -c Release --no-restore
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Build LlmChamber.Wpf
+      - name: Build
         run: |
-          dotnet restore src/LlmChamber.Wpf/LlmChamber.Wpf.csproj
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet build src/LlmChamber.Wpf/LlmChamber.Wpf.csproj -c Release --no-restore
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Build LlmChamber.Avalonia
-        run: |
-          dotnet restore src/LlmChamber.Avalonia/LlmChamber.Avalonia.csproj
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet build src/LlmChamber.Avalonia/LlmChamber.Avalonia.csproj -c Release --no-restore
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Build LlmChamber.WinForms
-        run: |
-          dotnet restore src/LlmChamber.WinForms/LlmChamber.WinForms.csproj
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet build src/LlmChamber.WinForms/LlmChamber.WinForms.csproj -c Release --no-restore
+          dotnet build .github/LlmChamber.ci.slnf -c Release --no-restore
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Run existing regression tests
         run: |
-          dotnet run --project test/LlmChamber.Tests/LlmChamber.Tests.csproj -c Release --framework net8.0
+          dotnet run --no-build --project test/LlmChamber.Tests/LlmChamber.Tests.csproj -c Release --framework net8.0
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet run --project test/LlmChamber.Tests/LlmChamber.Tests.csproj -c Release --framework net10.0
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Build LlmChamber.SuperResolution
-        run: |
-          dotnet build src/LlmChamber.SuperResolution/LlmChamber.SuperResolution.csproj -c Release
+          dotnet run --no-build --project test/LlmChamber.Tests/LlmChamber.Tests.csproj -c Release --framework net10.0
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Run SuperResolution regression tests
         run: |
-          dotnet run --project test/LlmChamber.SuperResolution.Tests/LlmChamber.SuperResolution.Tests.csproj -c Release
+          dotnet run --no-build --project test/LlmChamber.SuperResolution.Tests/LlmChamber.SuperResolution.Tests.csproj -c Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
