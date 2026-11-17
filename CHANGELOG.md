@@ -4,6 +4,11 @@ Git のバージョン記録・コミット差分と既存の変更履歴をも�
 
 ## 未リリース
 
+## [1.0.8] — 2026-11-18
+
+- 対応ターゲットを .NET 11（`net11.0` / `net11.0-windows`）に移行。`net8.0` / `net10.0` 向けの成果物は含まれなくなるため、利用側も .NET 11 へ更新が必要。
+- `Microsoft.Extensions.DependencyInjection.Abstractions` と `Microsoft.Extensions.Options` は .NET 11 の共有フレームワークを使うため、パッケージの明示依存から外した。
+
 ## [1.0.7] — 2026-11-01
 
 - Windows向けの任意の画像超解像モジュールに Real-HAT-GAN Sharper を追加（ProjectReference専用、NuGet未公開）。
