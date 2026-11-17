@@ -16,7 +16,7 @@ foreach ($id in $ids) {
         $reader = [IO.StreamReader]::new($spec[0].Open())
         try { [xml]$xml = $reader.ReadToEnd() } finally { $reader.Dispose() }
         if ($xml.package.metadata.id -ne $id -or $xml.package.metadata.version -ne $version) { throw 'Package identity mismatch' }
-        $tfms = if ($id -in @('LlmChamber.Wpf','LlmChamber.WinForms')) { @('net8.0-windows7.0','net10.0-windows7.0') } else { @('net8.0','net10.0') }
+        $tfms = if ($id -in @('LlmChamber.Wpf','LlmChamber.WinForms')) { @('net11.0-windows7.0') } else { @('net11.0') }
         foreach ($tfm in $tfms) {
             if (-not $zip.GetEntry("lib/$tfm/$id.dll")) { throw "Missing $id/$tfm assembly" }
         }

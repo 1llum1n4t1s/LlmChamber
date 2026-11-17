@@ -3,7 +3,7 @@
 **NuGet一発、ゼロ設定、環境汚染なし** — .NETアプリにローカルLLMを組み込むライブラリ
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![.NET](https://img.shields.io/badge/.NET-8.0%20%7C%2010.0-blue)](https://dotnet.microsoft.com/)
+[![.NET](https://img.shields.io/badge/.NET-11.0-blue)](https://dotnet.microsoft.com/)
 
 ## 特徴
 
@@ -345,7 +345,7 @@ catch (OllamaApiException ex)
 
 ## 動作要件
 
-- .NET 8.0 以上
+- .NET 11.0 以上
 - Windows / macOS / Linux（x64 / arm64）。機能ごとの自動取得範囲は Speech / Media の節を参照
 - Linux での Ollama 自動取得には `.tar.zst` を展開できる `tar` が必要
 - 未取得のランタイム・モデル・音声リソースの取得にはインターネット接続が必要

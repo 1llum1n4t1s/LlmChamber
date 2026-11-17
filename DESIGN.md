@@ -8,11 +8,11 @@ LlmChamber は .NET アプリからローカル LLM を利用するライブラ�
 | --- | --- |
 | `src/LlmChamber.Core/` | 公開 API、Ollama 管理、Speech/Media の共通実装。内部ビルド・テスト用で `IsPackable=false` |
 | `src/LlmChamber/` | ヘッドレス向け公開パッケージ |
-| `src/LlmChamber.Wpf/`、`src/LlmChamber.WinForms/` | Windows UI。`net8.0-windows` / `net10.0-windows` |
+| `src/LlmChamber.Wpf/`、`src/LlmChamber.WinForms/` | Windows UI。`net11.0-windows` |
 | `src/LlmChamber.Avalonia/` | Avalonia UI のコントロール |
 | `samples/`、`test/` | 各 UI とコンソールの利用例、Core のユニットテストと統合テスト用プロジェクト |
 
-`LlmChamber` と `LlmChamber.Avalonia` は `net8.0` / `net10.0`。4 公開パッケージは Core の `.cs` を `Compile Include` で直接取り込み、Core パッケージへの依存を公開しない。各 UI パッケージだけで共通 API も利用できる一方、共通コードの変更はすべての公開プロジェクトのコンパイルに影響する。
+`LlmChamber` と `LlmChamber.Avalonia` は `net11.0`。4 公開パッケージは Core の `.cs` を `Compile Include` で直接取り込み、Core パッケージへの依存を公開しない。各 UI パッケージだけで共通 API も利用できる一方、共通コードの変更はすべての公開プロジェクトのコンパイルに影響する。
 
 ## 主要コンポーネントとデータフロー
 
