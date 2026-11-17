@@ -13,18 +13,17 @@
 
 ## ビルドと検証
 
-.NET 10 SDK を使用する。ソリューションには WPF・WinForms のサンプルと Windows 専用の画像超解像モジュールが含まれるため、全体ビルドには Windows が必要。公開パッケージの TFM は DESIGN.md を参照する。`global.json` は Microsoft.Testing.Platform を選択しているため、`OutputType=Exe` を設定した xUnit v3 のテストプロジェクトを `dotnet run` で起動する。
+.NET 11 SDK を使用する。ソリューションには WPF・WinForms のサンプルと Windows 専用の画像超解像モジュールが含まれるため、全体ビルドには Windows が必要。公開パッケージの TFM は DESIGN.md を参照する。`global.json` は Microsoft.Testing.Platform を選択しているため、`OutputType=Exe` を設定した xUnit v3 のテストプロジェクトを `dotnet run` で起動する。
 
 ```powershell
 # ソリューション全体
 dotnet build LlmChamber.slnx
 
-# ユニットテスト（両 TFM）
-dotnet run --project test/LlmChamber.Tests/LlmChamber.Tests.csproj --framework net8.0
-dotnet run --project test/LlmChamber.Tests/LlmChamber.Tests.csproj --framework net10.0
+# ユニットテスト（net11.0）
+dotnet run --project test/LlmChamber.Tests/LlmChamber.Tests.csproj
 
 # 対象を絞った確認
-dotnet run --project test/LlmChamber.Tests/LlmChamber.Tests.csproj --framework net10.0 -- -class LlmChamber.Tests.OllamaModelsTests
+dotnet run --project test/LlmChamber.Tests/LlmChamber.Tests.csproj -- -class LlmChamber.Tests.OllamaModelsTests
 
 # 画像超解像モジュール
 dotnet run --project test/LlmChamber.SuperResolution.Tests/LlmChamber.SuperResolution.Tests.csproj
@@ -36,7 +35,8 @@ dotnet pack LlmChamber.slnx -c Release -o artifacts
 - コード変更では影響するテストを実行し、共通コードでは公開パッケージのビルドも確認する。全体ビルドが環境要件でできない場合は、対象 `.csproj` を個別にビルドして未検証範囲を明示する。
 - テストは xUnit v3 と NSubstitute。`test/LlmChamber.Tests/` は Core を ProjectReference し、`InternalsVisibleTo` で内部型を検証する。遅延初期化、HTTP 応答、ダウンロード先選択は既存のハンドラーや fixture に沿って検証する。
 - 実バイナリやネットワークを必要とするテストは `test/LlmChamber.IntegrationTests/` に置き、`[Trait("Category", "Integration")]` で区別する。現状このプロジェクトにテスト実装はないため、実行成功を実接続の検証と扱わない。
-- 配布時のビルド・pack 対象は `.github/workflows/publish.yml` を正本とする。4 公開プロジェクトを Release でビルドし、それぞれ `--no-build` で pack する構成。生成後はリポジトリルートから `./.github/scripts/Verify-Packages.ps1` を実行し、4 パッケージの ID・版・両 TFM の DLL・README・アイコンを検証する。出力先を変更した場合は `-PackageDirectory <出力先>` を指定する。
+- 配布時のビルド・pack 対象は `.github/workflows/publish.yml` を正本とする。4 公開プロジェクトを Release でビルドし、それぞれ `--no-build` で pack する構成。生成後はリポジトリルートから `./.github/scripts/Verify-Packages.ps1` を実行し、4 パッケージの ID・版・net11.0 系 TFM の DLL・README・アイコンを検証する。出力先を変更した場合は `-PackageDirectory <出力先>` を指定する。
+- 回帰テストの CI は `.github/workflows/dependency-validation.yml` が main への push・全 PR・手動実行で動かす。`.github/LlmChamber.ci.slnf`（4 公開パッケージ・SuperResolution・2 つのテスト）を 1 回だけ restore / build し、テスト 2 本を `--no-build` で実行する。`publish.yml` も同じ手順の `test` ジョブを先に実行し、通った場合だけ `publish` ジョブ（`needs: test`）が pack・NuGet 公開へ進む。テスト対象のプロジェクトを増減したら slnf と両 workflow を揃える。
 - 文書だけの変更は、記載したパス・コマンド・挙動をコードと設定に照合し、リンクと差分を検証する。
 
 ## Avalonia UI

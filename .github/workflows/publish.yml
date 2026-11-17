@@ -11,7 +11,43 @@ permissions:
   id-token: write
 
 jobs:
+  # 公開前の回帰テスト。失敗したら publish ジョブは実行されず、NuGet へ何も送らない。
+  # 検証内容は dependency-validation.yml と揃える(solution filter で1回だけ restore / build し、テストは再ビルドしない)。
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+          dotnet-version: 11.0.x
+      - name: Restore
+        run: |
+          dotnet restore .github/LlmChamber.ci.slnf
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build
+        run: |
+          dotnet build .github/LlmChamber.ci.slnf -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run existing regression tests
+        run: |
+          dotnet run --no-build --project test/LlmChamber.Tests/LlmChamber.Tests.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run SuperResolution regression tests
+        run: |
+          dotnet run --no-build --project test/LlmChamber.SuperResolution.Tests/LlmChamber.SuperResolution.Tests.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
   publish:
+    needs: test
     runs-on: windows-latest
     steps:
       - name: Checkout code
@@ -49,7 +85,7 @@ jobs:
           $installer = Join-Path $env:RUNNER_TEMP 'dotnet-install.ps1'
           Invoke-WebRequest 'https://raw.githubusercontent.com/actions/setup-dotnet/a98b56852c35b8e3190ac28c8c2271da59106c68/externals/install-dotnet.ps1' -OutFile $installer
           if ((Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash -ne 'B224982626C6DDF7CE915D7D560B7060D3C42754EB621F8CC53B8C775C0CC6B5') { throw 'Pinned .NET installer SHA-256 mismatch.' }
-          & $installer -Channel 10.0 -InstallDir $installRoot -NoPath
+          & $installer -Channel 11.0 -InstallDir $installRoot -NoPath
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           "DOTNET_ROOT=$installRoot" >> $env:GITHUB_ENV
           $installRoot >> $env:GITHUB_PATH
