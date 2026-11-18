@@ -3,7 +3,8 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [xml]$props = Get-Content -LiteralPath (Join-Path $PSScriptRoot '../../Directory.Build.props') -Raw
 $version = [string]$props.Project.PropertyGroup.Version
-if ($env:GITHUB_REF_NAME -like 'release/*' -and $env:GITHUB_REF_NAME -ne "release/$version") { throw 'Release branch/version mismatch' }
+# CI（GITHUB_ACTIONS=true）では、タグであることと v<版> との一致を無条件に要求する。ローカル実行では検査しない。
+if ($env:GITHUB_ACTIONS -eq 'true' -and ($env:GITHUB_REF_TYPE -ne 'tag' -or $env:GITHUB_REF_NAME -cne "v$version")) { throw 'Release tag/version mismatch' }
 $ids = @('LlmChamber', 'LlmChamber.Wpf', 'LlmChamber.Avalonia', 'LlmChamber.WinForms')
 $files = @(Get-ChildItem -LiteralPath $PackageDirectory -Filter '*.nupkg' -File)
 if ($files.Count -ne $ids.Count) { throw 'Unexpected package count' }

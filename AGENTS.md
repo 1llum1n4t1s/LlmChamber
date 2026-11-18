@@ -36,6 +36,7 @@ dotnet pack LlmChamber.slnx -c Release -o artifacts
 - テストは xUnit v3 と NSubstitute。`test/LlmChamber.Tests/` は Core を ProjectReference し、`InternalsVisibleTo` で内部型を検証する。遅延初期化、HTTP 応答、ダウンロード先選択は既存のハンドラーや fixture に沿って検証する。
 - 実バイナリやネットワークを必要とするテストは `test/LlmChamber.IntegrationTests/` に置き、`[Trait("Category", "Integration")]` で区別する。現状このプロジェクトにテスト実装はないため、実行成功を実接続の検証と扱わない。
 - 配布時のビルド・pack 対象は `.github/workflows/publish.yml` を正本とする。4 公開プロジェクトを Release でビルドし、それぞれ `--no-build` で pack する構成。生成後はリポジトリルートから `./.github/scripts/Verify-Packages.ps1` を実行し、4 パッケージの ID・版・net11.0 系 TFM の DLL・README・アイコンを検証する。出力先を変更した場合は `-PackageDirectory <出力先>` を指定する。
+- NuGet 公開は、main のコミットに付けた軽量タグ `vX.Y.Z` の push で `publish.yml` が起動する（release ブランチと GitHub Release は使わない）。publish ジョブは先頭で、タグであること・厳密な `vX.Y.Z` 形・軽量タグが実行 commit を指すこと・既定ブランチの祖先であること・`Directory.Build.props` の `<Version>` との一致を無条件に検査する。やり直しは `gh workflow run publish.yml --ref vX.Y.Z`。`Verify-Packages.ps1` は CI（`GITHUB_ACTIONS=true`）でタグと `v<版>` の一致も要求する。
 - 回帰テストの CI は `.github/workflows/dependency-validation.yml` が main への push・全 PR・手動実行で動かす。`.github/LlmChamber.ci.slnf`（4 公開パッケージ・SuperResolution・2 つのテスト）を 1 回だけ restore / build し、テスト 2 本を `--no-build` で実行する。`publish.yml` も同じ手順の `test` ジョブを先に実行し、通った場合だけ `publish` ジョブ（`needs: test`）が pack・NuGet 公開へ進む。テスト対象のプロジェクトを増減したら slnf と両 workflow を揃える。
 - 文書だけの変更は、記載したパス・コマンド・挙動をコードと設定に照合し、リンクと差分を検証する。
 
